@@ -125,11 +125,18 @@ def _most_common(items: list[Any]) -> Any | None:
     return counted[0][0] if counted else None
 
 
-def _row_doc_type(card_type: str | None, document_type: str | None) -> str | None:
+SINGLE_DOCUMENT_MAX_PAGES = 10
+
+
+def _row_doc_type(card_type: str | None, document_type: str | None, page_count: int | None = None) -> str | None:
     """The type of a page: its card's type, unless the card says "other" or has none. Then the type of
     its document (the majority of the document's page cards, see pipeline), so one page's wording
-    does not decide whether its document is a proof."""
+    does not decide whether its document is a proof. Only for a short file that holds one document:
+    a long file is often a whole bid merged into one PDF, and its majority type says nothing about
+    a single page."""
     if card_type and card_type != "other":
+        return card_type
+    if page_count is not None and page_count > SINGLE_DOCUMENT_MAX_PAGES:
         return card_type
     return document_type or card_type
 
@@ -264,7 +271,8 @@ def _load_bid(package_id: int) -> _Bid:
                 read_quality=float(page.read_quality or 0.0),
                 usable=not is_duplicate and not page.unreadable and bool(text.strip()),
                 unread=not is_duplicate and (page.unreadable or page.source == PageSource.none),
-                doc_type=_row_doc_type(card.doc_type if card else None, docs[page.document_id].doc_type),
+                doc_type=_row_doc_type(card.doc_type if card else None, docs[page.document_id].doc_type,
+                                       docs[page.document_id].page_count),
                 summary=(card.summary_ru or "") if card else "",
                 keywords=tuple(card.keywords or []) if card else (),
                 entities=list(card.entities or []) if card else [],
@@ -863,10 +871,12 @@ def _verify_item(ev: EvidenceOut, bid: _Bid, req: _Req) -> _Found | None:
         row=row,
         method=result.method or "exact",
         page_corrected=result.page_corrected,
-        from_confirming=not req.evidence_doc_types or row.doc_type in req.evidence_doc_types,
+        # A declaration is the bidder's own statement: a verified statement by the bidder is what the
+        # tender asks for, on whatever page it stands. Page types vary between runs; this must not.
+        from_confirming=(declaration or not req.evidence_doc_types or row.doc_type in req.evidence_doc_types),
         subject_is_bidder=_subject_is_bidder(ev.subject, ev.subject_stir, bid),
         doc_type=row.doc_type,
-        is_proof=verdict.is_proof_item(row.doc_type, declaration=declaration),
+        is_proof=declaration or verdict.is_proof_item(row.doc_type, declaration=declaration),
     )
 
 
@@ -921,6 +931,9 @@ def _hard_rules(*, req: _Req, final: _Final, judgement: str | None, claimed: lis
     return rules
 
 
+CLAIM_LABEL_NOTE = ("The model called this a claim without proof, but the quoted page is a proof document "
+                    "of an accepted type, or the tender asks only for the bidder's own statement: the code "
+                    "treats the content as satisfied.")
 IGNORED_EXPERT_NOTE = "The model asked for an expert, but this is not an equivalence requirement: the flag is ignored."
 
 
@@ -936,6 +949,8 @@ def _assess_one(final: _Final, plan: _Plan) -> _Checked:
         judgement, needs_expert, claimed = None, False, []
     else:
         judgement, needs_expert, claimed = ans.judgement, ans.needs_expert, list(ans.evidence)
+    model_judgement = judgement
+    claim_label_overridden = False
 
     found: list[_Found] = []
     views: list[verdict.EvidenceView] = []
@@ -993,6 +1008,12 @@ def _assess_one(final: _Final, plan: _Plan) -> _Checked:
         reasons.add(verdict.ATTRIBUTION)
     if claimed and not found:
         reasons.add(verdict.QUOTE_UNVERIFIED)
+    # The model's proof-versus-claim label is not trusted: on the same page it flips between runs.
+    # When the quoted evidence is a proof document of a type the tender accepts, the content counts
+    # as satisfied and the status table decides; otherwise the label stands as CLAIM_ONLY.
+    if judgement == CLAIMS_WITHOUT_PROOF and any(f.is_proof and f.from_confirming for f in usable):
+        judgement = SATISFIES
+        claim_label_overridden = True
     if judgement == CLAIMS_WITHOUT_PROOF:
         reasons.add(verdict.CLAIM_ONLY)
     # Proof versus claim is decided here, not by the model: a documentary requirement that only a
@@ -1050,11 +1071,13 @@ def _assess_one(final: _Final, plan: _Plan) -> _Checked:
     rationale_parts.extend(decision.notes)
     if needs_expert and not req.is_equivalent_allowed:
         rationale_parts.append(IGNORED_EXPERT_NOTE)
+    if claim_label_overridden:
+        rationale_parts.append(CLAIM_LABEL_NOTE)
     result = {
         "requirement_id": req.id,
         "status": Status(decision.status),
         "reason_codes": list(decision.reasons),
-        "llm_judgement": judgement,
+        "llm_judgement": model_judgement,
         "rationale": " ".join(rationale_parts),
         "confidence": decision.confidence,
         "confidence_parts": {**decision.confidence_parts, "discarded_unverified": discarded},
