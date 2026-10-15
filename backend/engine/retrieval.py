@@ -20,6 +20,7 @@ The absence rule (a wider search before "absent" is concluded) is `wide=True`: t
 from __future__ import annotations
 
 import re
+import threading
 from dataclasses import dataclass
 from functools import lru_cache
 
@@ -66,13 +67,22 @@ class PageDoc:
     keywords: tuple[str, ...] = ()
 
 
-_RU_STEMMER = _snowball_stemmer("russian")
+# Snowball stemmers keep per-word state, so one instance must not be shared between threads
+# (two bids retrieved at the same time crashed with IndexError). One stemmer per thread.
+_LOCAL = threading.local()
+
+
+def _ru_stemmer():
+    stemmer = getattr(_LOCAL, "ru", None)
+    if stemmer is None:
+        stemmer = _LOCAL.ru = _snowball_stemmer("russian")
+    return stemmer
 
 
 @lru_cache(maxsize=65536)
 def _stem(word: str) -> str:
     if _CYRILLIC_RE.search(word):
-        return _RU_STEMMER.stemWord(word)
+        return _ru_stemmer().stemWord(word)
     return word
 
 
