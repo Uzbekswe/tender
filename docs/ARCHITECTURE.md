@@ -386,22 +386,28 @@ Applied to every tender quote (stage 6), every page-card field (stage 4) and eve
 ### 6.6 Status decision table and confidence
 
 **Reason codes** (set by stages 8–11):
-`ABSENT` (nothing found after the wide search) · `VALUE_FAIL` / `VALUE_OK` (number compared by code) · `PARTIAL_COVERAGE` · `CLAIM_ONLY` (only the bidder's own proposal/letter, but the tender names a confirming document) · `WRONG_DOC_TYPE` · `EXPIRED` · `ATTRIBUTION` (statement is about someone else) · `CONTRADICTION` · `EQUIVALENT_NEEDS_EXPERT` · `UNREADABLE_IN_SCOPE` · `QUOTE_UNVERIFIED` · `NO_DEADLINE` · `LLM_ERROR`
+`ABSENT` (nothing found after the wide search) · `VALUE_FAIL` / `VALUE_OK` (number compared by code) · `PARTIAL_COVERAGE` · `CLAIM_ONLY` (set by code: a documentary requirement that only the bidder's own statement supports, or the judgement `claims_without_proof`) · `WRONG_DOC_TYPE` (a proof document of another proof type than the tender names) · `EXPIRED` · `ATTRIBUTION` (statement is about someone else) · `CONTRADICTION` · `EQUIVALENT_NEEDS_EXPERT` · `UNREADABLE_IN_SCOPE` · `QUOTE_UNVERIFIED` · `NO_DEADLINE` · `LLM_ERROR`
 
 **Decision order** (first matching row wins):
 
 | # | Condition | Status |
 |---|---|---|
-| 1 | `LLM_ERROR`, or `UNREADABLE_IN_SCOPE` with no verified evidence, or `EQUIVALENT_NEEDS_EXPERT`, or `needs_expert`, or `NO_DEADLINE` on a dated document | Needs human review |
+| 1 | `LLM_ERROR`, or `UNREADABLE_IN_SCOPE` with no verified evidence, or `EQUIVALENT_NEEDS_EXPERT`, or `needs_expert` (only on a requirement that allows an equivalent; ignored otherwise), or `NO_DEADLINE` on a dated document | Needs human review |
 | 2 | `VALUE_FAIL` on verified evidence, or judgement `contradicts` with verified evidence | Does not meet (reason: wrong value) |
 | 3 | `ABSENT` | Does not meet (reason: absent; shows pages searched) |
 | 4 | `ATTRIBUTION` or `CLAIM_ONLY` or `WRONG_DOC_TYPE` | Not confirmed |
 | 5 | `EXPIRED` or `PARTIAL_COVERAGE` or judgement `partially_satisfies` | Partial |
 | 6 | `CONTRADICTION` between bid documents on this requirement | Needs human review (both quotes shown) |
-| 7 | judgement `satisfies` (or `VALUE_OK`) with at least one verified evidence item from a confirming document | Meets |
+| 7 | judgement `satisfies` (or `VALUE_OK`) with at least one verified, bidder-attributed **proof** item from a confirming document | Meets |
 | 8 | anything else | Needs human review |
 
 Then: if confidence < threshold (default 80) → **Needs human review**, whatever the row gave. A "Meets" on a Mandatory requirement additionally requires at least one evidence item with `verify_method = exact` or a fuzzy match on a page with read quality ≥ 0.8; otherwise it is downgraded to Needs human review. This is how the system protects against the most expensive error, a false "Meets" (spec §12).
+
+**Proof versus claim is decided in code** (`engine/status.py`, not by the model). `PROOF_DOC_TYPES` (certificate, licence, registration certificate, tax certificate, contract, act, invoice, reference letter, financial statement, staff list, labour registry extract, passport datasheet, catalogue, power of attorney) prove a fact. `CLAIM_DOC_TYPES` (cover letter, guarantee letter, application form, technical proposal, price offer, form template, other) are the bidder's own statement. A requirement is a **declaration** when every evidence type is a claim type, or its confirmation method names a form, letter or statement (RU/UZ/EN keywords). Otherwise it is **documentary**. An item is proof when its document is a proof type, or when the requirement is a declaration and the document is a claim type. A documentary requirement that only claim documents support is "Not confirmed" (`CLAIM_ONLY`), even when the model says `satisfies`. The document type of a page is the type of its card, or the type of its document when the card says `other` or has none.
+
+**Needs expert** only counts for a requirement that allows an equivalent (`EQUIVALENT_NEEDS_EXPERT`). Otherwise the flag is ignored, noted in the rationale, and counted in `Run.progress["llm"]["ignored_needs_expert"]`.
+
+**Hard tier (task `match_hard`, Opus).** A mandatory requirement is re-asked once, alone, only when the first answer leaves it at needs review for one of these rules: the judgement is `cannot_judge`; every claimed quote failed verification; bid documents give different values; or confidence is below the threshold, unless the judgement is a clear answer (`satisfies`, `partially_satisfies`, `contradicts`, `claims_without_proof`, or `not_addressed` after the wide search). A clear answer is never re-asked, even if one of several quotes failed. Each escalation is logged with the rule that fired. `Run.progress["llm"]["escalation_skipped"]` counts the mandatory items with a clear answer that were not re-asked.
 
 **Confidence** is computed by code from signals it can measure, not asked from the model:
 

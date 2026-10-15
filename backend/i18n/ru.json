@@ -169,6 +169,7 @@
   "checklist.suggest.reason.POST_AWARD": "обязанность после заключения договора",
   "checklist.suggest.reason.LEGAL_BACKGROUND": "правовая справка без условия",
   "checklist.suggest.reason.DUPLICATE": "дубль",
+  "checklist.suggest.reason.CONTRADICTION": "противоречит другому пункту",
   "checklist.suggest.reason.NONE": "без причины",
   "checklist.suggest.apply": "Применить",
   "checklist.suggest.apply_all": "Применить все предложения ({n})",
