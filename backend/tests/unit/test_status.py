@@ -10,7 +10,7 @@ from engine.status import EvidenceView, confidence, decide
 
 def ev(*, verified: bool = True, method: str | None = "exact", page_corrected: bool = False,
        read_quality: float = 1.0, from_confirming_doc: bool = True,
-       subject_is_bidder: bool | None = True) -> EvidenceView:
+       subject_is_bidder: bool | None = True, is_proof: bool = True) -> EvidenceView:
     return EvidenceView(
         verified=verified,
         method=method,
@@ -18,6 +18,7 @@ def ev(*, verified: bool = True, method: str | None = "exact", page_corrected: b
         read_quality=read_quality,
         from_confirming_doc=from_confirming_doc,
         subject_is_bidder=subject_is_bidder,
+        is_proof=is_proof,
     )
 
 
@@ -314,3 +315,52 @@ def test_decide_reports_method_and_parts():
     assert set(d.confidence_parts) >= {"quote_factor", "read_factor", "method_factor"}
     assert d.reasons == ()
     assert d.notes == ()
+
+
+# ---------- proof versus claim (ARCHITECTURE §6.6) ----------
+
+def test_proof_and_claim_types_are_document_types_and_disjoint():
+    from engine.cards import DOC_TYPES
+
+    assert st.PROOF_DOC_TYPES <= set(DOC_TYPES)
+    assert st.CLAIM_DOC_TYPES <= set(DOC_TYPES)
+    assert not (st.PROOF_DOC_TYPES & st.CLAIM_DOC_TYPES)
+
+
+@pytest.mark.parametrize("types, method, expected", [
+    (["guarantee_letter"], None, True),              # every type is a claim type
+    (["technical_proposal", "price_offer"], None, True),
+    (["certificate"], None, False),                  # a proof type
+    (["certificate", "guarantee_letter"], None, False),
+    ([], None, False),                              # nothing named: documentary
+    ([], "Гарантийное письмо о сроке поставки", True),
+    ([], "Заполните форму приложения", True),
+    ([], "Letter of undertaking", True),
+    ([], "Information about the company", False),   # "form" inside another word is not a form
+    ([], "Выписка из реестра", False),
+])
+def test_is_declaration(types, method, expected):
+    assert st.is_declaration(types, method) is expected
+
+
+def test_is_proof_item_by_type_and_declaration():
+    assert st.is_proof_item("certificate", declaration=False)
+    assert st.is_proof_item("certificate", declaration=True)
+    assert not st.is_proof_item("guarantee_letter", declaration=False)  # documentary: a claim is not proof
+    assert st.is_proof_item("guarantee_letter", declaration=True)       # declaration: the claim is the proof
+    assert not st.is_proof_item("other", declaration=False)
+    assert not st.is_proof_item(None, declaration=True)
+
+
+def test_meets_needs_a_proof_item_not_only_a_claim():
+    claim_only = [ev(is_proof=False)]
+    assert run(judgement="satisfies", evidence=claim_only).status == "needs_review"
+    assert run(judgement="satisfies", evidence=claim_only, reasons=[st.VALUE_OK],
+               numeric_decided=True).status == "needs_review"
+
+
+def test_mandatory_guard_uses_the_proof_item_that_supports_meets():
+    # A strong exact quote on a claim document does not make a weak proof item strong.
+    evidence = [ev(method="exact", is_proof=False), ev(method="fuzzy_ocr", read_quality=0.5)]
+    d = run(judgement="satisfies", req_type="mandatory", threshold=0, evidence=evidence)
+    assert d.status == "needs_review"

@@ -558,3 +558,168 @@ def test_contradiction_that_is_not_bidder_evidence_is_not_value_fail(
     result = _results(run_id)["U-005"]
     assert _status(result) != Status.does_not_meet
     assert "VALUE_FAIL" not in result.reason_codes
+
+
+# ---------- proof versus claim, needs_expert and the hard-tier rules (assess, one requirement) ----------
+
+CERT = "Сертификат соответствия ISO 9001 выдан."
+GUARANTEE = "Гарантийное письмо о сроке поставки 30 дней."
+CONTRACT = "Договор поставки от 01.02.2026."
+
+
+def _req(**overrides: Any) -> bid_stages._Req:
+    base = dict(
+        id=1, code="U-001", scope="bidder", category="Qualification", lot_item=None,
+        parameter="Сертификат ISO 9001", parameter_ru=None, operator="exists", value=None, value_max=None,
+        unit=None, req_type="mandatory", confirmation_method=None, evidence_doc_types=("certificate",),
+        search_terms=(), source_quote="", source_page=1, is_equivalent_allowed=False, verification="documents",
+    )
+    return bid_stages._Req(**{**base, **overrides})
+
+
+def _page(doc_type: str | None, text: str, *, document_id: int = 1, number: int = 1) -> bid_stages._Row:
+    return bid_stages._Row(
+        id=document_id * 100 + number, canonical_id=document_id * 100 + number, document_id=document_id,
+        doc_name=f"doc{document_id}.pdf", number=number, text=text, source="text_layer", is_ocr=False,
+        read_quality=1.0, usable=True, unread=False, doc_type=doc_type, summary="", keywords=(), entities=[],
+    )
+
+
+def _ev(quote: str, *, doc: str = "DOC-01", page: int = 1, value: str | None = None) -> EvidenceOut:
+    return EvidenceOut(doc_ref=doc, page=page, quote=quote, value=value, subject=BIDDER, subject_stir=BIDDER_STIR)
+
+
+def _answer(judgement: str, *evidence: EvidenceOut, needs_expert: bool = False) -> MatchOut:
+    return MatchOut(requirement_code="U-001", judgement=judgement, rationale="Ответ модели.",
+                    evidence=list(evidence), needs_expert=needs_expert)
+
+
+def _assess(req: bid_stages._Req, answer: MatchOut, *rows: bid_stages._Row, stage: str = "wide") -> bid_stages._Checked:
+    doc_pages: dict[int, dict[int, bid_stages._Row]] = {}
+    for row in rows:
+        doc_pages.setdefault(row.document_id, {})[row.number] = row
+    bid = bid_stages._Bid(
+        project_id=1, package_id=1, report_lang="ru", deadline=None, bidder_name=BIDDER, bidder_stir=BIDDER_STIR,
+        rows=list(rows), usable=list(rows), unread=0, doc_pages=doc_pages, by_id={r.id: r for r in rows},
+    )
+    plan = bid_stages._Plan(bid=bid, version_id=1, reqs=[req], deadline_text=None, retrieval=None,
+                            group_of={}, platform_reqs=[])
+    return bid_stages._assess_one(bid_stages._Final(req, answer, stage, (1,)), plan)
+
+
+def test_row_doc_type_uses_the_document_type_when_the_card_says_other_or_is_missing() -> None:
+    assert bid_stages._row_doc_type("other", "certificate") == "certificate"
+    assert bid_stages._row_doc_type(None, "tax_certificate") == "tax_certificate"
+    assert bid_stages._row_doc_type("act", "certificate") == "act"   # the page's own type wins
+    assert bid_stages._row_doc_type("other", None) == "other"
+    assert bid_stages._row_doc_type(None, None) is None
+
+
+def test_documentary_requirement_with_only_a_guarantee_letter_is_not_confirmed() -> None:
+    # The model says "satisfies"; the code decides that a letter is a claim, not proof.
+    checked = _assess(_req(), _answer("satisfies", _ev(GUARANTEE)), _page("guarantee_letter", GUARANTEE))
+    assert checked.result["status"] == Status.not_confirmed
+    assert "CLAIM_ONLY" in checked.result["reason_codes"]
+    assert "WRONG_DOC_TYPE" not in checked.result["reason_codes"]  # a claim is not a wrong proof type
+    assert checked.hard == []  # a clear answer is not re-asked
+
+
+def test_documentary_requirement_with_a_certificate_meets() -> None:
+    checked = _assess(_req(), _answer("satisfies", _ev(CERT)), _page("certificate", CERT))
+    assert checked.result["status"] == Status.meets
+
+
+def test_declaration_requirement_with_a_guarantee_letter_meets() -> None:
+    req = _req(evidence_doc_types=("guarantee_letter",), parameter="Гарантийное письмо о сроке поставки")
+    checked = _assess(req, _answer("satisfies", _ev(GUARANTEE)), _page("guarantee_letter", GUARANTEE))
+    assert checked.result["status"] == Status.meets
+
+
+def test_wrong_doc_type_is_only_for_a_proof_document_of_another_proof_type() -> None:
+    req = _req(evidence_doc_types=("tax_certificate",), parameter="Справка о налоговой регистрации")
+    checked = _assess(req, _answer("satisfies", _ev(CONTRACT)), _page("contract", CONTRACT))
+    assert "WRONG_DOC_TYPE" in checked.result["reason_codes"]
+    assert checked.result["status"] == Status.not_confirmed
+
+
+def test_needs_expert_is_ignored_on_a_requirement_that_is_not_an_equivalence_case() -> None:
+    checked = _assess(_req(), _answer("satisfies", _ev(CERT), needs_expert=True), _page("certificate", CERT))
+    assert checked.result["status"] == Status.meets
+    assert "EQUIVALENT_NEEDS_EXPERT" not in checked.result["reason_codes"]
+    assert bid_stages.IGNORED_EXPERT_NOTE in checked.result["rationale"]
+
+
+def test_needs_expert_on_an_equivalence_case_needs_review() -> None:
+    req = _req(is_equivalent_allowed=True)
+    checked = _assess(req, _answer("satisfies", _ev(CERT), needs_expert=True), _page("certificate", CERT))
+    assert checked.result["status"] == Status.needs_review
+    assert "EQUIVALENT_NEEDS_EXPERT" in checked.result["reason_codes"]
+    assert checked.hard == []  # an expert question, not a rule of the hard tier
+
+
+def test_cannot_judge_is_an_equivalence_expert_question_only_for_equivalence_cases() -> None:
+    checked = _assess(_req(), _answer("cannot_judge"), _page(None, "Другой текст."))
+    assert checked.result["status"] == Status.needs_review
+    assert "EQUIVALENT_NEEDS_EXPERT" not in checked.result["reason_codes"]
+
+
+@pytest.mark.parametrize("answer, pages, stage, status", [
+    pytest.param(_answer("contradicts", _ev(CERT)), [_page("certificate", CERT)], "wide",
+                 Status.does_not_meet, id="contradicts-with-evidence"),
+    pytest.param(_answer("claims_without_proof", _ev(GUARANTEE)), [_page("guarantee_letter", GUARANTEE)], "wide",
+                 Status.not_confirmed, id="claims-without-proof"),
+    pytest.param(_answer("not_addressed"), [_page(None, "Другой текст.")], "wide",
+                 Status.does_not_meet, id="absent-after-the-wide-search"),
+    pytest.param(_answer("satisfies", _ev(CERT), _ev("Этой фразы нет в документе.")),
+                 [_page("certificate", CERT)], "wide", Status.meets, id="one-of-two-quotes-failed"),
+])
+def test_clear_sonnet_answers_are_not_escalated(answer, pages, stage, status) -> None:
+    checked = _assess(_req(), answer, *pages, stage=stage)
+    assert checked.result["status"] == status
+    assert checked.hard == []
+
+
+def test_mandatory_cannot_judge_is_escalated_by_its_rule() -> None:
+    checked = _assess(_req(), _answer("cannot_judge"), _page(None, "Другой текст."))
+    assert checked.hard[0] == "rule judgement cannot_judge"
+
+
+def test_mandatory_satisfies_with_every_quote_failed_is_escalated_by_its_rule() -> None:
+    checked = _assess(_req(), _answer("satisfies", _ev("Этой фразы нет в документе.")), _page("certificate", CERT))
+    assert checked.result["status"] == Status.needs_review
+    assert checked.hard == ["rule all claimed quotes failed verification"]
+
+
+def test_mandatory_contradiction_between_bid_documents_is_escalated_by_its_rule() -> None:
+    req = _req(operator=">=", value="12", unit="мес", parameter="Срок гарантии", evidence_doc_types=("certificate",))
+    rows = [
+        _page("certificate", "Срок гарантии 24 месяца.", document_id=1),
+        _page("certificate", "Срок гарантии 36 месяцев.", document_id=2),
+    ]
+    answer = _answer("satisfies", _ev("Срок гарантии 24 месяца.", doc="DOC-01"),
+                     _ev("Срок гарантии 36 месяцев.", doc="DOC-02"))
+    checked = _assess(req, answer, *rows)
+    assert "CONTRADICTION" in checked.result["reason_codes"]
+    assert checked.result["status"] == Status.needs_review
+    assert checked.hard == ["rule bid documents give different values"]
+
+
+def test_non_mandatory_requirement_is_never_escalated() -> None:
+    checked = _assess(_req(req_type="scored"), _answer("cannot_judge"), _page(None, "Другой текст."))
+    assert checked.result["status"] == Status.needs_review
+    assert checked.hard == []
+
+
+def test_expert_flag_on_an_ordinary_requirement_is_ignored_and_counted(data_dir: Path, llm: FakeLLM, font: str) -> None:
+    _, package_id, version_id = _setup(font)
+    llm.answers["T-001"] = llm.answers["T-001"].model_copy(update={"needs_expert": True})
+
+    run_id = _run_bid(package_id, version_id)
+
+    run = _run_row(run_id)
+    assert run.status == RunStatus.done, run.error
+    assert _status(_results(run_id)["T-001"]) == Status.meets  # the flag does not send it to review
+    assert run.progress["llm"]["ignored_needs_expert"] == 1
+    # T-001 meets, U-001 is partial, U-002 not confirmed, U-004 does not meet: four mandatory items with a
+    # clear Sonnet answer. U-003 is unclear and is re-asked on the hard tier.
+    assert run.progress["llm"]["escalation_skipped"] == 4
