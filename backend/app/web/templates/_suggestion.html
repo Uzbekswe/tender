@@ -1,0 +1,30 @@
+{# The consolidation suggestion on one requirement: a badge with the reason, the why as a second line
+   and a tooltip, and the per-row apply button on a draft. On an approved version it is read-only. #}
+{% set s = req.suggestion %}
+{% set kind = suggestion_kind(req) %}
+<div class="suggest">
+  {% if s.decision == 'exclude' %}
+    <span class="badge badge-suggest-exclude" title="{{ s.why }}">{{ t('checklist.suggest.badge.exclude', reason=t('checklist.suggest.reason.' ~ (s.reason_code or 'NONE'))) }}</span>
+  {% elif s.decision == 'merge_into' %}
+    <span class="badge badge-suggest-merge" title="{{ s.why }}">{{ t('checklist.suggest.badge.merge', target=s.target or t('common.none')) }}</span>
+  {% elif kind == 'type_fix' %}
+    <span class="badge badge-suggest-type" title="{{ s.why }}">{{ t('checklist.suggest.badge.type', type=t('req_type.' ~ s.type_fix)) }}</span>
+  {% elif kind == 'platform_check' %}
+    <span class="badge badge-suggest-platform" title="{{ s.why }}">{{ t('checklist.suggest.badge.platform') }}</span>
+  {% else %}
+    <span class="badge badge-muted" title="{{ s.why }}">{{ t('checklist.suggest.badge.keep') }}</span>
+  {% endif %}
+  {% if s.why %}<div class="muted small suggest-why">{{ s.why }}</div>{% endif %}
+  {% if kind %}
+    {% if draft %}
+      <form method="post" action="/projects/{{ pid }}/checklist/requirements/{{ req.id }}/apply-suggestion"
+            hx-post="/projects/{{ pid }}/checklist/requirements/{{ req.id }}/apply-suggestion"
+            hx-include="#checklist-filters" hx-target="#checklist-main" hx-swap="outerHTML"
+            class="inline-form">
+        <button type="submit" class="btn small">{{ t('checklist.suggest.apply') }}</button>
+      </form>
+    {% else %}
+      <span class="muted small">{{ t('checklist.suggest.readonly') }}</span>
+    {% endif %}
+  {% endif %}
+</div>

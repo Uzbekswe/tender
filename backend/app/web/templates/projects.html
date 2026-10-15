@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}{{ t('projects.title') }}{% endblock %}
+{% block content %}
+<h1>{{ t('projects.title') }}</h1>
+
+{% if rows %}
+<div class="table-wrap">
+<table class="data">
+  <thead>
+    <tr>
+      <th>{{ t('projects.col.name') }}</th>
+      <th>{{ t('projects.col.customer') }}</th>
+      <th>{{ t('projects.col.deadline') }}</th>
+      <th>{{ t('projects.col.verdict') }}</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for row in rows %}
+    {% set p = row.project %}
+    <tr>
+      <td data-label="{{ t('projects.col.name') }}">
+        <a href="/projects/{{ p.id }}">{{ p.name }}</a>
+        <a class="btn small" href="/projects/{{ p.id }}">{{ t('projects.open') }}</a>
+      </td>
+      <td data-label="{{ t('projects.col.customer') }}">{{ p.customer or t('common.none') }}</td>
+      <td data-label="{{ t('projects.col.deadline') }}">
+        {% if p.submission_deadline %}
+          {{ row.deadline_text }}
+          <div class="muted small">{{ t('deadline.' ~ row.deadline.state, n=row.deadline.days) }}</div>
+        {% else %}
+          <span class="badge badge-warn">{{ t('deadline.missing') }}</span>
+        {% endif %}
+      </td>
+      <td data-label="{{ t('projects.col.verdict') }}">
+        {% if row.verdict %}
+          <span class="badge badge-verdict-{{ row.verdict }}">{{ t('verdict.' ~ row.verdict) }}</span>
+          <strong>{{ row.score }}%</strong>
+        {% else %}
+          {{ t('common.none') }}
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="muted">{{ t('projects.empty') }}</p>
+{% endif %}
+
+<section class="card">
+  <h2>{{ t('projects.new.title') }}</h2>
+  {% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+  <form method="post" action="/projects" class="form-grid">
+    <label>{{ t('projects.new.name') }}
+      <input type="text" name="name" required maxlength="200" value="{{ values.name or '' }}">
+    </label>
+    <label>{{ t('projects.new.customer') }}
+      <input type="text" name="customer" value="{{ values.customer or '' }}">
+    </label>
+    <label>{{ t('projects.new.deadline') }}
+      <input type="datetime-local" name="submission_deadline" value="{{ values.submission_deadline or '' }}">
+    </label>
+    <label>{{ t('projects.new.report_lang') }}
+      <select name="report_lang">
+        <option value="ru" {% if values.report_lang == 'ru' %}selected{% endif %}>Русский</option>
+        <option value="en" {% if values.report_lang == 'en' %}selected{% endif %}>English</option>
+      </select>
+    </label>
+    <div class="form-actions">
+      <button type="submit" class="btn primary">{{ t('projects.new.submit') }}</button>
+    </div>
+  </form>
+</section>
+{% endblock %}
