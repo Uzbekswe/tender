@@ -1,0 +1,40 @@
+# LLM configuration. Task -> tier -> model; a stage can also ask for a tier directly.
+#
+# provider: claude_cli (default, uses the logged-in Claude Code account, no key)
+#           | anthropic_api (needs ANTHROPIC_API_KEY) | openrouter | handoff (development only)
+# LLM_PROVIDER in .env overrides `provider` below.
+
+provider = "claude_cli"
+
+[tiers]                    # tier -> model id
+easy     = "claude-haiku-5-5"
+standard = "claude-sonnet-5-5"
+hard     = "claude-opus-5-5"
+
+[tasks]                    # task -> tier (a value that is not a tier name is used as a model id)
+read_page              = "hard"      # vision on scanned / garbled pages
+page_cards             = "easy"      # clean-text page description = file classification
+confirm_contradictions = "easy"
+extract_requirements   = "standard"
+extract_scheme         = "standard"
+consolidate            = "standard"
+match                  = "standard"
+match_hard             = "hard"      # mandatory items with conflicting or unclear evidence
+word_recommendations   = "standard"
+
+[escalation]               # on an answer that fails validation twice, retry once on the next tier up
+enabled = true
+order = ["easy", "standard", "hard"]
+
+# Optional output effort per tier, anthropic_api only, e.g. hard = "high".
+# [effort]
+
+# Pin a prompt version per task; omit to use the highest vN.md in prompts/<task>/
+[prompt_versions]
+
+[limits]
+parallel_calls = 4          # LLM_CONCURRENCY in .env overrides this
+requests_per_minute = 120
+max_retries = 4
+request_timeout_s = 300
+temperature = 0             # not sent to claude_cli (no such flag); determinism comes from the cache
