@@ -92,6 +92,7 @@ class Project(SQLModel, table=True):
     subject: str | None = None
     submission_deadline: datetime | None = None  # user-editable; the tender may not state it
     report_lang: str = "ru"  # ru | en (uz later)
+    mode: str = "supplier"  # supplier (one bid) | customer (one tender, N bidders); see docs/customer-side-decisions.md
     settings: dict = json_field({})  # overrides of config/scoring.toml
     created_at: datetime = Field(default_factory=utcnow)
 
