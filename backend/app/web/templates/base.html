@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{% endblock %} · {{ t('app.name') }}</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/htmx.min.js" defer></script>
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/">{{ t('app.name') }}</a>
+  <nav class="nav" aria-label="main">
+    <a href="/" class="{{ 'active' if active == 'projects' }}">{{ t('nav.projects') }}</a>
+    {% if nav_run_id %}
+    <a href="/runs/{{ nav_run_id }}/compare" class="{{ 'active' if nav_section == 'compare' }}">{{ t('nav.comparison') }}</a>
+    <a href="/runs/{{ nav_run_id }}/summary" class="{{ 'active' if nav_section == 'summary' }}">{{ t('nav.summary') }}</a>
+    {% endif %}
+  </nav>
+  <div class="lang" aria-label="{{ t('lang.label') }}">
+    <a href="/lang/ru?next={{ next_url|urlencode }}" class="{{ 'on' if lang == 'ru' }}" hreflang="ru">RU</a>
+    <span aria-hidden="true">|</span>
+    <a href="/lang/en?next={{ next_url|urlencode }}" class="{{ 'on' if lang == 'en' }}" hreflang="en">EN</a>
+  </div>
+</header>
+<main class="container">
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

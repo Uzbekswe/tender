@@ -1,0 +1,31 @@
+{# The checks the e-procurement platform makes, not the bid files: a collapsible card under the top bar.
+   Confirm and undo post with HTMX, and the card is swapped in place (the top bar comes out of band). #}
+<details id="platform-card" class="card platform-card"{% if platform_card['open'] %} open{% endif %}>
+  <summary><strong>{{ platform_card['title'] }}</strong></summary>
+  {% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+  <p class="muted small">{{ t('platform.card.hint') }}</p>
+  <ul class="platform-list">
+    {% for p in platform_card['items'] %}
+      <li class="platform-item{% if p.confirmed %} confirmed{% endif %}">
+        <div class="platform-head">
+          <span class="chip {{ 'status-meets' if p.confirmed else 'status-needs_review' }}">{{ t('platform.state.confirmed') if p.confirmed else t('platform.state.pending') }}</span>
+          <a class="code" href="{{ p.href }}"
+             hx-get="/runs/{{ run_id }}/compare/items/{{ p.id }}" hx-target="#compare-panel" hx-swap="outerHTML">{{ p.code }}</a>
+          <span>{{ p.parameter }}</span>
+        </div>
+        {% if p.quote %}<blockquote>{{ p.quote }}</blockquote>{% endif %}
+        {% if p.page is not none %}<p class="small muted">{{ t('compare.panel.page') }} {{ p.page }}</p>{% endif %}
+        <div class="actions">
+          <form method="post" action="{{ p.confirm_url }}" class="inline-form"
+                hx-post="{{ p.confirm_url }}" hx-target="#platform-card" hx-swap="outerHTML">
+            <button type="submit" class="btn small primary"{% if p.confirmed %} disabled{% endif %}>{{ t('platform.confirm') }}</button>
+          </form>
+          <form method="post" action="{{ p.unconfirm_url }}" class="inline-form"
+                hx-post="{{ p.unconfirm_url }}" hx-target="#platform-card" hx-swap="outerHTML">
+            <button type="submit" class="btn small"{% if not p.confirmed %} disabled{% endif %}>{{ t('platform.unconfirm') }}</button>
+          </form>
+        </div>
+      </li>
+    {% endfor %}
+  </ul>
+</details>

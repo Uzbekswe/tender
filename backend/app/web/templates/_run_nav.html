@@ -1,0 +1,6 @@
+{# Sub-navigation for one bid run: its comparison, its summary, and the history of its bid package. #}
+<nav class="run-nav" aria-label="{{ t('run.nav.label') }}">
+  <a href="/runs/{{ run_id }}/compare" class="{{ 'active' if nav_section == 'compare' }}"{% if nav_section == 'compare' %} aria-current="page"{% endif %}>{{ t('nav.comparison') }}</a>
+  <a href="/runs/{{ run_id }}/summary" class="{{ 'active' if nav_section == 'summary' }}"{% if nav_section == 'summary' %} aria-current="page"{% endif %}>{{ t('nav.summary') }}</a>
+  <a href="/packages/{{ package_id }}/history" class="{{ 'active' if nav_section == 'history' }}"{% if nav_section == 'history' %} aria-current="page"{% endif %}>{{ t('nav.history') }}</a>
+</nav>

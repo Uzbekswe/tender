@@ -1,0 +1,33 @@
+{# Top bar of the comparison: verdict, the requirements that decide it, percentages, mandatory count,
+   tender points against the pass mark, and one chip per status (each chip is a filter). Also swapped
+   out of band after an override. #}
+<section id="compare-top" class="card cmp-top" hx-swap-oob="true" aria-label="{{ t('compare.title') }}">
+  <div class="cmp-verdict">
+    <span class="badge badge-verdict-{{ top.verdict }}">{{ top.verdict_label }}</span>
+    {% if top.deciding %}
+      <span class="muted small">{{ t('compare.because') }}</span>
+      {% for d in top.deciding %}<a class="code" href="{{ d.href }}" title="{{ d.name }}">{{ d.code }}</a>{% endfor %}
+    {% endif %}
+  </div>
+  <dl class="cmp-kpis">
+    <div><dt>{{ t('compare.score.overall') }}</dt><dd>{{ top.overall }} <span class="muted small">({{ top.range }})</span></dd></div>
+    <div><dt>{{ t('compare.score.goods') }}</dt><dd>{{ top.goods }}</dd></div>
+    <div><dt>{{ t('compare.score.bidder') }}</dt><dd>{{ top.bidder }}</dd></div>
+  </dl>
+  <p class="cmp-line">
+    <span>{{ top.mandatory }}</span>
+    {% if top.points_text %}
+      <span class="pts pts-{{ top.points_class }}">{{ top.points_text }} · {{ top.points_label }}</span>
+    {% else %}
+      <span class="muted">{{ t('compare.score.points_none') }}</span>
+    {% endif %}
+    {% if top.platform_text %}<span>{{ top.platform_text }}</span>{% endif %}
+  </p>
+  {% if top.scheme_mismatch %}<p class="warn-line">{{ t('compare.score.scheme_mismatch') }}</p>{% endif %}
+  <nav class="chips" aria-label="{{ t('compare.filter.status') }}">
+    <a class="chip{% if not top.status_filter %} active{% endif %}" href="{{ top.all_href }}"{% if not top.status_filter %} aria-current="true"{% endif %}>{{ t('compare.all') }} · {{ top.total }}</a>
+    {% for c in top.chips %}
+      <a class="chip status-{{ c.status }}{% if c.active %} active{% endif %}" href="{{ c.href }}" aria-pressed="{{ 'true' if c.active else 'false' }}">{{ c.label }} · {{ c.count }}</a>
+    {% endfor %}
+  </nav>
+</section>

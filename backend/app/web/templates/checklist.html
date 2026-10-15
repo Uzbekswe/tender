@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}{{ t('checklist.title') }}{% endblock %}
+{% block content %}
+<p><a href="/projects/{{ pid }}">{{ t('checklist.back_project') }}</a></p>
+<h1>{{ t('checklist.title') }}</h1>
+<p class="muted">{{ project.name }}</p>
+
+{% include "_checklist_main.html" %}
+
+{% if checklist %}
+  <details class="card">
+    <summary><strong>{{ t('checklist.add.title') }}</strong></summary>
+    <form method="post" action="/projects/{{ pid }}/checklist/requirements" class="form-grid">
+      <label>{{ t('checklist.field.scope') }}
+        <select name="scope">
+          {% for s in ['goods', 'bidder'] %}<option value="{{ s }}">{{ t('checklist.scope.' ~ s) }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>{{ t('checklist.field.req_type') }}
+        <select name="req_type">
+          {% for rt in ['mandatory', 'scored', 'desirable'] %}<option value="{{ rt }}">{{ t('req_type.' ~ rt) }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>{{ t('checklist.field.category') }}
+        <input type="text" name="category" required maxlength="120">
+      </label>
+      <label class="wide">{{ t('checklist.field.parameter') }}
+        <input type="text" name="parameter" required maxlength="500">
+      </label>
+      <label>{{ t('checklist.field.operator') }}
+        <select name="operator">
+          {% for op in ['text', 'exists', '>=', '<=', '=', 'range'] %}<option value="{{ op }}">{{ t('op.' ~ op) }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>{{ t('checklist.field.value') }}
+        <input type="text" name="value">
+      </label>
+      <label>{{ t('checklist.field.value_max') }}
+        <input type="text" name="value_max">
+      </label>
+      <label>{{ t('checklist.field.unit') }}
+        <input type="text" name="unit">
+      </label>
+      <label>{{ t('checklist.field.confirmation') }}
+        <input type="text" name="confirmation_method">
+      </label>
+      <label>{{ t('checklist.field.consequence') }}
+        <select name="consequence">
+          <option value="">{{ t('common.none') }}</option>
+          {% for c in ['rejection', 'score_reduction'] %}<option value="{{ c }}">{{ t('consequence.' ~ c) }}</option>{% endfor %}
+        </select>
+      </label>
+      <div class="form-actions">
+        <button type="submit" class="btn primary">{{ t('checklist.add.submit') }}</button>
+      </div>
+    </form>
+  </details>
+
+  <section class="card">
+    <h2>{{ t('checklist.scheme.title') }}</h2>
+    {% set scheme = checklist.scheme %}
+    {% if scheme %}
+      <dl class="kv">
+        <dt>{{ t('checklist.scheme.stated_max') }}</dt><dd>{{ scheme.stated_max if scheme.stated_max is not none else t('common.none') }}</dd>
+        <dt>{{ t('checklist.scheme.pass') }}</dt><dd>{{ scheme.pass_threshold if scheme.pass_threshold is not none else t('common.none') }}</dd>
+        <dt>{{ t('checklist.scheme.sum') }}</dt><dd>{{ scheme.criteria_sum }}</dd>
+      </dl>
+      {% if scheme.mismatch %}
+        <div class="alert alert-warn" role="alert">{{ t('checklist.scheme.mismatch', sum=scheme.criteria_sum, max=scheme.stated_max) }}</div>
+      {% endif %}
+      {% if scheme.criteria %}
+      <div class="table-wrap">
+      <table class="data">
+        <thead><tr>
+          <th>{{ t('checklist.scheme.col.number') }}</th>
+          <th>{{ t('checklist.scheme.col.name') }}</th>
+          <th>{{ t('checklist.scheme.col.max') }}</th>
+          <th>{{ t('checklist.scheme.col.levels') }}</th>
+        </tr></thead>
+        <tbody>
+        {% for c in scheme.criteria %}
+          <tr>
+            <td data-label="{{ t('checklist.scheme.col.number') }}">{{ c.number }}</td>
+            <td data-label="{{ t('checklist.scheme.col.name') }}">{{ c.name }}</td>
+            <td data-label="{{ t('checklist.scheme.col.max') }}">{{ c.max_points }}</td>
+            <td data-label="{{ t('checklist.scheme.col.levels') }}">
+              <ul class="levels">
+                {% for lvl in c.levels %}<li>{{ lvl.get('points', '') }}: {{ lvl.get('condition_text', '') }}</li>{% endfor %}
+              </ul>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+      {% endif %}
+      {% if scheme.platform_scored %}
+        <p class="small"><strong>{{ t('checklist.scheme.platform') }}:</strong>
+          {% for item in scheme.platform_scored %}{{ item.get('name', '') }} {{ item.get('points', '') }}{% if not loop.last %}, {% endif %}{% endfor %}
+        </p>
+      {% endif %}
+      {% if scheme.source_quote %}
+        <p class="small muted">{{ t('checklist.scheme.source') }}{% if scheme.page_number %} · p.{{ scheme.page_number }}{% endif %}</p>
+        <blockquote>{{ scheme.source_quote }}</blockquote>
+      {% endif %}
+    {% else %}
+      <p class="muted">{{ t('checklist.scheme.none') }}</p>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>{{ t('checklist.questions.title') }}</h2>
+    {% for q in checklist.questions %}
+      <div class="question">
+        <span class="badge badge-muted">{{ t('questions.kind.' ~ q.kind) }}</span>
+        <p>{{ q.text }}</p>
+        {% for s in q.sources %}
+          {% if s is mapping and s.get('quote') %}<blockquote>{{ s.get('quote') }}</blockquote>{% endif %}
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="muted">{{ t('checklist.questions.none') }}</p>
+    {% endfor %}
+  </section>
+
+  <section class="card">
+    <h2>{{ t('checklist.rejected.title') }}</h2>
+    <p class="muted small">{{ t('checklist.rejected.hint') }}</p>
+    {% for item in checklist.rejected_by_verifier %}
+      <div class="rejected">
+        {% if item is mapping %}
+          {% for k, v in item.items() %}<span class="kv-pair"><strong>{{ k }}</strong>: {{ v }}</span> {% endfor %}
+        {% else %}
+          {{ item }}
+        {% endif %}
+      </div>
+    {% else %}
+      <p class="muted">{{ t('checklist.rejected.none') }}</p>
+    {% endfor %}
+  </section>
+{% endif %}
+{% endblock %}
