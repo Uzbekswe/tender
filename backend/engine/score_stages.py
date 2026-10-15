@@ -250,6 +250,23 @@ def load_run_rows(session: Session, run_id: int) -> RunRows | None:
     )
 
 
+def scoring_incomplete(progress: dict[str, Any] | None) -> bool:
+    """True while the match or assess stage still has pending units: the run's score is partial.
+    The web pages use it too, to tell a finished bid run from one that is marked done but still matching."""
+    for stage in ("match", "assess"):
+        value = (progress or {}).get(stage)
+        if not isinstance(value, dict):
+            continue
+        raw = value.get("pending")
+        if isinstance(raw, bool):
+            continue
+        if isinstance(raw, int) and raw > 0:
+            return True
+        if isinstance(raw, list) and raw:
+            return True
+    return False
+
+
 def effective_statuses(session: Session, run_id: int) -> dict[int, str]:
     """requirement_id -> effective status for one run (overrides applied)."""
     rows = load_run_rows(session, run_id)

@@ -4,7 +4,7 @@ Read models use from_attributes, so they can be built straight from the table ro
 """
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -24,6 +24,7 @@ class ProjectCreate(BaseModel):
     subject: str | None = None
     submission_deadline: datetime | None = None
     report_lang: str = Field(default="ru", pattern="^(ru|en)$")
+    mode: Literal["supplier", "customer"] = "supplier"
 
 
 class ProjectUpdate(BaseModel):
@@ -45,6 +46,7 @@ class ProjectRead(_Read):
     subject: str | None
     submission_deadline: datetime | None
     report_lang: str
+    mode: str  # supplier | customer
     settings: dict[str, Any]
     created_at: datetime
 

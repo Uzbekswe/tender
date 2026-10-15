@@ -69,6 +69,7 @@ from engine.score_stages import (
     platform_items,
     recompute_run,
     scheme_view,
+    scoring_incomplete,  # also imported from here by app.web.routes
 )
 from engine.verify import highlight_spans
 
@@ -382,23 +383,6 @@ def override_status(match_id: int, body: OverrideIn, session: Session = Depends(
 
 
 # ---------- history ----------
-
-def scoring_incomplete(progress: dict[str, Any] | None) -> bool:
-    """True while the match or assess stage still has pending units: the run's score is partial.
-    The web pages use it too, to tell a finished bid run from one that is marked done but still matching."""
-    for stage in ("match", "assess"):
-        value = (progress or {}).get(stage)
-        if not isinstance(value, dict):
-            continue
-        raw = value.get("pending")
-        if isinstance(raw, bool):
-            continue
-        if isinstance(raw, int) and raw > 0:
-            return True
-        if isinstance(raw, list) and raw:
-            return True
-    return False
-
 
 @router.get("/packages/{package_id}/history", response_model=list[HistoryRunOut])
 def package_history(package_id: int, session: Session = Depends(get_session)) -> list[HistoryRunOut]:
