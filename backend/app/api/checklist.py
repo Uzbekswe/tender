@@ -25,7 +25,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, TypeVar
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Response
+from fastapi.responses import JSONResponse
 from sqlmodel import Session, SQLModel, col, select
 
 from app.db import get_session
@@ -48,6 +49,7 @@ from app.models import (
 from app.schemas_checklist import (
     ApplySuggestionsIn,
     ApplySuggestionsRead,
+    ChecklistImportRead,
     ChecklistRead,
     ChecklistVersionRead,
     Counts,
@@ -62,6 +64,7 @@ from app.schemas_checklist import (
     SuggestionCounts,
     VersionSummary,
 )
+from engine.checklist_io import ChecklistIOError, export_checklist, import_checklist_report
 from engine.status import VERIFICATION_PLATFORM
 
 router = APIRouter(prefix="/api/v1", tags=["checklist"])
@@ -815,3 +818,63 @@ def new_checklist_version(project_id: int, session: Session = Depends(get_sessio
     session.commit()
     session.refresh(draft)
     return _version_read(draft)
+
+
+# ---------- export and import (engine.checklist_io) ----------
+
+@router.get("/projects/{project_id}/checklist/export")
+def export_checklist_file(
+    project_id: int, version: int | None = None, session: Session = Depends(get_session),
+) -> JSONResponse:
+    """An approved checklist as a JSON download. `version` is the version number; without it the
+    newest approved version. Drafts are refused (409)."""
+    _get_or_404(session, Project, project_id, "project")
+    if version is None:
+        target = _latest_approved(session, project_id)
+        if target is None:
+            raise HTTPException(status_code=404, detail="no approved checklist version yet")
+    else:
+        target = session.exec(
+            select(ChecklistVersion)
+            .where(ChecklistVersion.project_id == project_id, ChecklistVersion.number == version)
+            .order_by(ChecklistVersion.id.desc())
+        ).first()
+        if target is None:
+            raise HTTPException(status_code=404, detail=f"checklist version {version} not found")
+    try:
+        data = export_checklist(session, target.id)
+    except ChecklistIOError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+    return JSONResponse(
+        content=data,
+        headers={"Content-Disposition": f'attachment; filename="checklist-v{target.number}.json"'},
+    )
+
+
+@router.post(
+    "/projects/{project_id}/checklist/import",
+    response_model=ChecklistImportRead,
+    status_code=201,
+)
+def import_checklist_file(
+    project_id: int,
+    response: Response,
+    body: dict[str, Any] = Body(...),
+    session: Session = Depends(get_session),
+) -> ChecklistImportRead:
+    """Import a checklist JSON file (see engine/checklist_io.py) as a new approved version.
+    Importing the same content again returns the existing version with status 200 and writes nothing.
+    422: not a checklist file; 409: a tender document is missing from the tender package or not read."""
+    _get_or_404(session, Project, project_id, "project")
+    try:
+        report = import_checklist_report(session, project_id, body)
+    except ChecklistIOError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+    if not report.created:
+        response.status_code = 200
+    return ChecklistImportRead(
+        version=_version_read(report.version),
+        already_imported=not report.created,
+        excluded_on_import=report.excluded_on_import,
+        warnings=report.warnings,
+    )
