@@ -1,0 +1,82 @@
+{# The matrix body: filters, warnings and the table. A filter change swaps this block (#matrix) with HTMX. #}
+<form method="get" action="/projects/{{ project_id }}/comparison" class="filters matrix-filters"
+      hx-get="/projects/{{ project_id }}/comparison" hx-target="#matrix" hx-swap="innerHTML"
+      hx-push-url="true" hx-trigger="change">
+  <fieldset class="scope-tabs">
+    <legend class="muted small">{{ t('comparison.filter.scope') }}</legend>
+    <label class="toggle"><input type="radio" name="scope" value="" {% if not filters.scope %}checked{% endif %}> {{ t('compare.all') }}</label>
+    <label class="toggle"><input type="radio" name="scope" value="goods" {% if filters.scope == 'goods' %}checked{% endif %}> {{ t('checklist.scope.goods') }}</label>
+    <label class="toggle"><input type="radio" name="scope" value="bidder" {% if filters.scope == 'bidder' %}checked{% endif %}> {{ t('checklist.scope.bidder') }}</label>
+  </fieldset>
+  <label class="toggle"><input type="checkbox" name="only_mandatory" value="1" {% if filters.only_mandatory %}checked{% endif %}> {{ t('comparison.filter.mandatory') }}</label>
+  <label class="toggle"><input type="checkbox" name="only_differences" value="1" {% if filters.only_differences %}checked{% endif %}> {{ t('comparison.filter.differences') }}</label>
+  <label class="toggle"><input type="checkbox" name="only_problems" value="1" {% if filters.only_problems %}checked{% endif %}> {{ t('comparison.filter.problems') }}</label>
+  <button type="submit" class="btn small">{{ t('compare.filter.apply') }}</button>
+  <a class="btn small" href="{{ xlsx_href }}" download>{{ t('summary.download.xlsx') }}</a>
+</form>
+
+{% for w in matrix.warnings %}
+  <div class="alert alert-warn" role="status">{{ w.text }}</div>
+{% endfor %}
+
+{% if matrix.rows %}
+<div class="matrix-wrap">
+  <table class="matrix">
+    <thead>
+      <tr>
+        <th scope="col" class="sticky-col">{{ t('comparison.col.requirement') }}</th>
+        {% for b in matrix.bidders %}
+        <th scope="col" class="bidder-col" title="{{ b.tooltip }}">
+          <div class="bidder-name">{% if b.rank is not none %}<span class="muted small">{{ b.rank_text }}</span> {% endif %}{{ b.name }}</div>
+          {% if b.verdict_text %}
+            <span class="badge badge-verdict-{{ b.verdict }}">{{ b.verdict_text }}</span>
+          {% else %}
+            <span class="muted small">{{ t('comparison.no_result') }}</span>
+          {% endif %}
+          {% if b.points %}
+            <div class="small"><span class="pts pts-{{ b.points.cls }}">{{ b.points.text }}</span>{% if b.points.label %} · <span class="pts pts-{{ b.points.cls }}">{{ b.points.label }}</span>{% endif %}</div>
+          {% endif %}
+          {% if b.order_not_certain %}<div class="small warn-line">{{ t('committee.order_not_certain') }}</div>{% endif %}
+        </th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+    {% for r in matrix.rows %}
+      {% if r.scope_label %}
+        <tr class="group group-scope"><th scope="colgroup" colspan="{{ matrix.bidders|length + 1 }}">{{ r.scope_label }}</th></tr>
+      {% endif %}
+      {% if r.category_label %}
+        <tr class="group group-category"><th scope="colgroup" colspan="{{ matrix.bidders|length + 1 }}">{{ r.category_label }}</th></tr>
+      {% endif %}
+      <tr>
+        <th scope="row" class="sticky-col req-col">
+          <div>
+            <span class="code">{{ r.code }}</span>
+            <span class="badge badge-type-{{ r.req_type }}">{{ t('req_type.' ~ r.req_type) }}</span>
+            {% if r.platform %}<span class="badge badge-platform">{{ t('checklist.badge.platform') }}</span>{% endif %}
+          </div>
+          <div class="small">{{ r.name }}</div>
+        </th>
+        {% for c in r.cells %}
+        <td class="cell" title="{{ c.full }}">
+          {% if c.status %}
+            {% if c.href %}
+              <a class="chip status-{{ c.status }}" href="{{ c.href }}">{{ c.label }}</a>
+            {% else %}
+              <span class="chip status-{{ c.status }}">{{ c.label }}</span>
+            {% endif %}
+            {% if c.short %}<div class="small muted">{{ c.short }}</div>{% endif %}
+          {% else %}
+            <span class="muted small">{{ t('comparison.cell.none') }}</span>
+          {% endif %}
+        </td>
+        {% endfor %}
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+  <p class="muted">{{ t('compare.list.empty') }}</p>
+{% endif %}

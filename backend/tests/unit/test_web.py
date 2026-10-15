@@ -33,7 +33,7 @@ from app.models import (
 from engine.score_stages import recompute_run
 from tests.unit.test_results_api import _seed as seed_scored_bid
 
-WEB = "/"
+WEB = "/supplier"
 
 
 @pytest.fixture
@@ -1161,7 +1161,7 @@ def test_top_menu_links_to_the_latest_finished_bid_run_on_project_pages(client: 
         assert f'href="/runs/{ids["run"]}/summary"' in nav, url
         assert "nav-soon" not in nav, url
     # The projects list is not a project page: no run links, no disabled placeholders.
-    home = _nav_block(client.get("/").text)
+    home = _nav_block(client.get("/supplier").text)
     assert "/runs/" not in home and "nav-soon" not in home
 
 

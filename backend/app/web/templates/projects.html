@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% block title %}{{ t('projects.title') }}{% endblock %}
+{% block title %}{{ t('side.' ~ side ~ '.title') }}{% endblock %}
 {% block content %}
-<h1>{{ t('projects.title') }}</h1>
+<h1>{{ t('side.' ~ side ~ '.title') }}</h1>
 
 {% if rows %}
 <div class="table-wrap">
@@ -67,6 +67,7 @@
         <option value="en" {% if values.report_lang == 'en' %}selected{% endif %}>English</option>
       </select>
     </label>
+    <input type="hidden" name="mode" value="{{ side }}">
     <div class="form-actions">
       <button type="submit" class="btn primary">{{ t('projects.new.submit') }}</button>
     </div>

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ t('home.title') }}{% endblock %}
+{% block content %}
+<h1>{{ t('home.title') }}</h1>
+<p class="muted">{{ t('home.lead') }}</p>
+<div class="role-grid">
+  <a class="role-card" href="/supplier">
+    <strong>{{ t('home.supplier') }}</strong>
+    <span class="muted small">{{ t('home.supplier.hint') }}</span>
+  </a>
+  <a class="role-card" href="/customer">
+    <strong>{{ t('home.customer') }}</strong>
+    <span class="muted small">{{ t('home.customer.hint') }}</span>
+  </a>
+</div>
+{% endblock %}

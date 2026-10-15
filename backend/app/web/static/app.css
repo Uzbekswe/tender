@@ -257,11 +257,11 @@ table.stages progress { width: 120px; vertical-align: middle; }
 .badge-run-failed { background: var(--does-not-meet-bg); color: var(--does-not-meet); }
 .badge-run-waiting_approval { background: var(--partial-bg); color: var(--partial); }
 .badge-run-running, .badge-run-queued { background: var(--needs-review-bg); color: var(--needs-review); }
-.status-meets { background: var(--meets-bg); color: var(--meets); }
-.status-partial { background: var(--partial-bg); color: var(--partial); }
-.status-not_confirmed { background: var(--not-confirmed-bg); color: var(--not-confirmed); }
-.status-does_not_meet { background: var(--does-not-meet-bg); color: var(--does-not-meet); }
-.status-needs_review { background: var(--needs-review-bg); color: var(--needs-review); }
+.status-meets, .chip.status-meets { background: var(--meets-bg); color: var(--meets); }
+.status-partial, .chip.status-partial { background: var(--partial-bg); color: var(--partial); }
+.status-not_confirmed, .chip.status-not_confirmed { background: var(--not-confirmed-bg); color: var(--not-confirmed); }
+.status-does_not_meet, .chip.status-does_not_meet { background: var(--does-not-meet-bg); color: var(--does-not-meet); }
+.status-needs_review, .chip.status-needs_review { background: var(--needs-review-bg); color: var(--needs-review); }
 
 .run { margin-bottom: 12px; }
 .run-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.7rem; margin-bottom: 0.5rem; }
@@ -486,3 +486,124 @@ a.chip:hover { border-color: currentColor; }
   .cmp-item .cmp-conf { grid-column: 1 / -1; justify-self: start; }
   table.history td.code { white-space: normal; }
 }
+
+/* ---------- customer side: bidders, matrix, ranking ---------- */
+.run-nav span {
+  padding: 0.3rem 0.75rem;
+  border: 1px dashed var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.bidder { margin-bottom: 14px; }
+.bidder h3 { margin: 0 0 0.2rem; overflow-wrap: anywhere; }
+.bidder-add { margin-top: 0.8rem; }
+.mode-choice {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.2rem;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+.mode-choice legend { font-size: 0.85rem; color: var(--muted); margin-bottom: 0.2rem; }
+.mode-choice label { font-size: 0.95rem; }
+
+.matrix-top { display: flex; flex-direction: column; gap: 0.6rem; }
+.matrix-advisory { margin: 0; }
+.bidder-counts { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+.bidder-counts li { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.5rem; }
+
+.matrix-filters { margin-bottom: 0.6rem; align-items: center; }
+.matrix-filters fieldset { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.matrix-filters legend { font-size: 0.85rem; color: var(--muted); margin-right: 0.4rem; }
+.matrix-filters label.toggle {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.matrix-filters label.toggle input { margin: 0; }
+.matrix-filters label.toggle:has(input:checked) { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+
+.matrix-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  margin-bottom: 12px;
+}
+table.matrix { border-collapse: separate; border-spacing: 0; min-width: 100%; font-size: 0.88rem; }
+table.matrix th, table.matrix td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.45rem 0.55rem;
+  border-bottom: 1px solid var(--border);
+}
+table.matrix thead th { font-size: 0.8rem; color: var(--muted); font-weight: 600; background: var(--surface); }
+table.matrix .sticky-col {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--surface);
+  min-width: 200px;
+  max-width: 240px;
+  box-shadow: 1px 0 0 var(--border);
+}
+table.matrix thead .sticky-col { z-index: 2; }
+table.matrix .bidder-col { min-width: 200px; max-width: 260px; }
+table.matrix .bidder-name { font-weight: 600; overflow-wrap: anywhere; color: var(--text); }
+table.matrix .req-col .small { overflow-wrap: anywhere; }
+table.matrix td.cell { min-width: 200px; }
+table.matrix tr.group th {
+  background: var(--bg);
+  color: var(--text);
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+table.matrix tr.group-scope th { border-top: 2px solid var(--border); }
+
+.decision-form { display: grid; gap: 0.5rem; margin-top: 0.5rem; }
+.decision-form label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.85rem; color: var(--muted); }
+.decision-form input[type=text] { width: 100%; }
+.decision-form .btn { width: auto; }
+
+@media (max-width: 640px) {
+  .matrix-filters label.toggle { font-size: 0.85rem; }
+  .matrix-filters fieldset { width: 100%; }
+}
+
+/* ---------- start page: the role choice ---------- */
+.role-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  margin-top: 1rem;
+}
+.role-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  text-decoration: none;
+}
+.role-card:hover { border-color: var(--accent); }
+.role-card strong { font-size: 1.2rem; }
+.nav a.switch-role { margin-left: auto; font-size: 0.9rem; }
+
+/* ---------- split view: the committee decision ---------- */
+.decision { margin-top: 16px; }
+.decision .decision-form { max-width: 640px; }
