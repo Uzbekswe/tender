@@ -311,3 +311,16 @@ def test_manually_added_code_beyond_the_range_forms_its_own_bucket() -> None:
 def test_codes_are_ordered_by_number_inside_a_bucket_and_codeless_items_come_last() -> None:
     queries = _coded_queries(["U-004", "NOCODE", "U-002", "U-001"])
     assert _batch_codes(queries) == [["U-001", "U-002", "U-004"], ["NOCODE"]]
+
+
+def test_stemming_is_thread_safe():
+    from concurrent.futures import ThreadPoolExecutor
+
+    from engine import retrieval
+
+    words = [f"договорами{i}" if i % 2 else f"организациями{i}" for i in range(4000)]
+    expected = {w: retrieval._ru_stemmer().stemWord(w) for w in words}
+    retrieval._stem.cache_clear()
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        got = list(pool.map(retrieval._stem, words))
+    assert got == [expected[w] for w in words]
