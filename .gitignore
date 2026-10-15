@@ -1,0 +1,53 @@
+# ---------------------------------------------------------------------------
+# NEVER COMMIT: real tender / bid documents and anything derived from them.
+# (Comments must be on their own lines: git does not support trailing comments.)
+# ---------------------------------------------------------------------------
+# Real tender and bid files (confidential, personal data)
+test-data/
+# Runtime data: uploads, page images, SQLite DB, LLM cache, handoff in/outbox
+data/
+# Experiment runs (fresh data dirs with results from the real documents)
+data_runs/
+output/
+# Hand-checked answers and reports built from the real documents
+eval/gold/
+eval/reports/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.log
+logs/
+
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python / tooling
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+node_modules/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Local assistant/tool settings (machine-specific)
+.claude/
