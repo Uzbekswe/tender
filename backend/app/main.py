@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from app.api.checklist import router as checklist_router
 from app.api.llm_status import router as llm_status_router
 from app.api.projects import router as api_router
+from app.api.results import router as results_router
 from app.db import init_db
 from app.runner import runner
 import engine.pipeline  # noqa: F401  (registers reading stages)
@@ -34,6 +35,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="Tender-Sverka", version="0.1.0", lifespan=lifespan)
 app.include_router(api_router)
 app.include_router(checklist_router)
+app.include_router(results_router)
 app.include_router(llm_status_router)
 
 
