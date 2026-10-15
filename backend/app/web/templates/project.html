@@ -19,7 +19,7 @@
     </p>
   {% endif %}
   <form method="post" action="/projects/{{ project.id }}/deadline" class="inline-form">
-    <input type="datetime-local" name="submission_deadline" value="{{ deadline_input }}" aria-label="{{ t('deadline.title') }}">
+    <input type="date" name="submission_deadline" value="{{ deadline_input }}" aria-label="{{ t('deadline.title') }}">
     <button type="submit" class="btn">{{ t('deadline.save') }}</button>
   </form>
 </section>
