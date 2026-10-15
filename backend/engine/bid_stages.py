@@ -101,6 +101,7 @@ _NUMBER_RE = re.compile(r"(\d+)")
 PLATFORM_RATIONALE = {
     "ru": "Проверяется на электронной площадке, а не по документам заявки.",
     "en": "Checked on the e-procurement platform, not from the bid documents.",
+    "uz": "Elektron platformada tekshiriladi, taklif hujjatlari boʻyicha emas.",
 }
 
 
@@ -1116,7 +1117,7 @@ class _AssessOutcome:
 
 def _platform_one(req: _Req, bid: _Bid) -> _Checked:
     """A requirement the e-procurement platform checks: needs review, no evidence, no LLM."""
-    rationale = PLATFORM_RATIONALE["en" if bid.report_lang == "en" else "ru"]
+    rationale = PLATFORM_RATIONALE[bid.report_lang if bid.report_lang in PLATFORM_RATIONALE else "ru"]
     return _Checked(
         result={
             "requirement_id": req.id,

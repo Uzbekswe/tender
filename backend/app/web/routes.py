@@ -165,12 +165,19 @@ def _aware(value: datetime) -> datetime:
 
 
 def _parse_datetime(raw: str) -> datetime | None:
+    """The deadline field is a plain date (no time to fill in); the deadline is the end of that day,
+    local time. A full date-time (API clients, older forms) is still accepted."""
     raw = raw.strip()
-    return _aware(datetime.fromisoformat(raw)) if raw else None
+    if not raw:
+        return None
+    if len(raw) == 10:
+        day = datetime.fromisoformat(raw).replace(hour=23, minute=59)
+        return day.astimezone().astimezone(timezone.utc)
+    return _aware(datetime.fromisoformat(raw))
 
 
 def _dt_input(value: datetime | None) -> str:
-    return _aware(value).astimezone().strftime("%Y-%m-%dT%H:%M") if value else ""
+    return _aware(value).astimezone().strftime("%Y-%m-%d") if value else ""
 
 
 def _deadline_text(value: datetime | None) -> str | None:
@@ -1003,7 +1010,8 @@ def _humanize(code: str) -> str:
 
 def display_name(parameter: str | None, parameter_ru: str | None, lang: str) -> str:
     """The name of a requirement on the screen. The Russian name on the Russian UI when there is one;
-    otherwise the name as extracted (the Russian one when that is empty)."""
+    otherwise the name as extracted (the Russian one when that is empty). The extracted name is in the
+    tender's own language, so the Uzbek UI shows it like the English one."""
     original = (parameter or "").strip()
     russian = (parameter_ru or "").strip()
     if lang == "ru" and russian:

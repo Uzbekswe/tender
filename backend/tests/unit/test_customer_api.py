@@ -609,6 +609,22 @@ def test_xlsx_has_matrix_and_summary_with_the_label_and_no_quotes(client: TestCl
     assert not any("ZEBRA" in value for value in everything)  # no evidence quotes in the export
 
 
+def test_xlsx_of_an_uzbek_project_is_in_uzbek(client: TestClient):
+    ids = _seed(lang="uz")
+    resp = client.get(f"{API}/projects/{ids['project']}/comparison.xlsx")
+    assert resp.status_code == 200, resp.text
+    wb = load_workbook(io.BytesIO(resp.content))
+    matrix = wb["Matrix"]
+    assert matrix["A1"].value == "Tavsiyaviy: qarorni baholash komissiyasi qabul qiladi"
+    header = [cell.value for cell in matrix[2]]
+    assert header[:6] == ["Kod", "Boʻlim", "Turi", "Toifa", "Talab", "Tekshiradi"]
+    col = header.index(BIDDERS["C"]) + 1
+    cell = matrix.cell(row=4, column=col).value  # U-001 row, bidder C
+    assert cell.startswith("Mos kelmaydi") and "Ishtirokchi tomonidan taqdim etilmagan" in cell
+    everything = " ".join(str(c.value) for sheet in wb.worksheets for row in sheet.iter_rows() for c in row if c.value)
+    assert "Does not meet" not in everything and "Not provided" not in everything
+
+
 def test_xlsx_without_an_approved_checklist_is_409(client: TestClient):
     ids = _bare_customer(approved=False)
     assert client.get(f"{API}/projects/{ids['project']}/comparison.xlsx").status_code == 409

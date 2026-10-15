@@ -156,3 +156,34 @@ def test_verdict_text_covers_the_three_verdicts(en):
     assert verdict_text("needs_revision", en) == "Open points for the committee"
     assert verdict_text("rejection_risk", en) == "Subject to rejection by the committee"
     assert verdict_text(None, en) is None
+
+
+# ---------- Uzbek wording (report language "uz") ----------
+
+@pytest.fixture
+def uz():
+    return translator("uz")
+
+
+def test_uzbek_committee_sentences_keep_the_committee_rule(uz):
+    mandatory = _sentence(uz, "does_not_meet", ["ABSENT"], mandatory=True)
+    assert mandatory == (
+        "Ishtirokchi quyidagini tasdiqlovchi hujjat taqdim etmadi: Rated power. "
+        "Majburiy talabga mos kelmaydi, komissiya qaroriga koʻra rad etilishi mumkin."
+    )
+    assert "rad etiladi" not in mandatory  # never "will be rejected"
+    assert _sentence(uz, "does_not_meet", ["ABSENT"]) == (
+        "Ishtirokchi quyidagini tasdiqlovchi hujjat taqdim etmadi: Rated power."
+    )
+    assert _sentence(uz, "does_not_meet", ["VALUE_FAIL"]) == (
+        "Taklifdagi qiymat: 3.0 kW; hujjatlashtirish talab qiladi: ≥ 2.5 kW."
+    )
+    assert _sentence(uz, "meets", []) == "Talab bajarilgan: Rated power."
+    assert _sentence(uz, "needs_review", []) == "Komissiya bahosini talab qiladi: Rated power."
+
+
+def test_uzbek_verdicts_and_short_reasons(uz):
+    assert verdict_text("ready", uz) == "Barcha majburiy talablarga mos keladi (tavsiyaviy)"
+    assert verdict_text("rejection_risk", uz) == "Komissiya qaroriga koʻra rad etilishi mumkin"
+    assert uz("committee.short.ABSENT") == "Ishtirokchi tomonidan taqdim etilmagan"
+    assert uz("committee.advisory") == "Tavsiyaviy: qarorni baholash komissiyasi qabul qiladi"

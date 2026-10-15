@@ -310,7 +310,8 @@ def test_scheme_messages_follow_the_report_language():
     scheme = _scheme([(1, 4), (2, 2), (3, 3), (4, 1), (5, 4)], stated=15, threshold=11)
     assert scheme_checks(scheme, "en") == ["Criteria maxima sum to 14 but stated maximum is 15"]
     assert scheme_checks(scheme, "ru") == ["Сумма максимумов критериев 14 не равна заявленному максимуму 15"]
-    # Anything but "en" falls back to Russian, like the rest of the report.
+    assert scheme_checks(scheme, "uz") == ["Mezonlar maksimumlari yigʻindisi 14 eʼlon qilingan maksimum 15 ga teng emas"]
+    # Anything but "en" and "uz" falls back to Russian, like the rest of the report.
     assert scheme_checks(scheme, "xx") == scheme_checks(scheme, "ru")
 
 

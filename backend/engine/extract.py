@@ -409,6 +409,12 @@ _SCHEME_MESSAGES: dict[str, dict[str, str]] = {
         "duplicate": "Criterion number {number} appears more than once",
         "level": "Criterion {number}: max points {max_points} but its highest level gives {top}",
     },
+    "uz": {
+        "sum": "Mezonlar maksimumlari yigʻindisi {total} eʼlon qilingan maksimum {stated} ga teng emas",
+        "threshold": "Oʻtish bali {threshold} eʼlon qilingan maksimum {stated} dan yuqori",
+        "duplicate": "Mezon raqami {number} bir necha marta uchraydi",
+        "level": "{number}-mezon: maksimum {max_points} ball, lekin eng yuqori daraja {top} ball beradi",
+    },
 }
 
 
@@ -416,7 +422,7 @@ def scheme_checks(scheme: SchemeOut, lang: str = "ru") -> list[str]:
     """Arithmetic and consistency problems of the tender's scoring scheme, as messages in `lang`."""
     if not scheme.has_scheme:
         return []
-    msg = _SCHEME_MESSAGES["en" if lang == "en" else "ru"]
+    msg = _SCHEME_MESSAGES[lang if lang in ("ru", "uz", "en") else "ru"]
     issues: list[str] = []
     total = sum(c.max_points for c in scheme.criteria)
     if scheme.criteria and scheme.stated_max is not None and not _close(total, scheme.stated_max):
