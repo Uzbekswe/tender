@@ -1,0 +1,234 @@
+{
+  "description": "Synthetic quote-verifier cases (ARCHITECTURE §6.5). Each case gives a quote, the pages of one document and the cited page. expected_verified is the required outcome. expected_page is checked only when verified. Cases with an OCR page need rapidfuzz.",
+  "cases": [
+    {
+      "id": "P01-exact-cited-page",
+      "quote": "Участник должен предоставить гарантию не менее 24 месяцев.",
+      "pages": {"1": "Раздел 3. Участник должен предоставить гарантию не менее 24 месяцев. Иные условия не предусмотрены."},
+      "cited_page": 1,
+      "is_ocr": {"1": false},
+      "expected_verified": true,
+      "expected_page": 1
+    },
+    {
+      "id": "P02-nbsp-and-extra-spaces",
+      "quote": "Мощность принтера не менее 2 500 Вт.",
+      "pages": {"1": "Мощность принтера   не менее 2 500 Вт."},
+      "cited_page": 1,
+      "is_ocr": {"1": false},
+      "expected_verified": true,
+      "expected_page": 1
+    },
+    {
+      "id": "P03-hyphenated-line-break",
+      "quote": "Поставщик обязан обеспечить исполнение договора в срок.",
+      "pages": {"1": "Поставщик обязан обеспечить испол-\nнение договора в срок."},
+      "cited_page": 1,
+      "is_ocr": {"1": false},
+      "expected_verified": true,
+      "expected_page": 1
+    },
+    {
+      "id": "P04-uzbek-apostrophe-variants",
+      "quote": "O'zbekiston Respublikasi qonunchiligiga muvofiq",
+      "pages": {"1": "Bu shartnoma O‘zbekiston Respublikasi qonunchiligiga muvofiq tuziladi."},
+      "cited_page": 1,
+      "is_ocr": {"1": false},
+      "expected_verified": true,
+      "expected_page": 1
+    },
+    {
+      "id": "P05-adjacent-page",
+      "quote": "Срок поставки составляет тридцать дней.",
+      "pages": {"2": "Введение к разделу поставки.", "3": "Срок поставки составляет тридцать дней. Далее по тексту."},
+      "cited_page": 2,
+      "is_ocr": {"2": false, "3": false},
+      "expected_verified": true,
+      "expected_page": 3
+    },
+    {
+      "id": "P06-quote-across-page-break",
+      "quote": "Гарантийный срок составляет 36 месяцев",
+      "pages": {
+        "4": "Условия гарантии. Гарантийный срок составляет",
+        "5": "36 месяцев с даты поставки товара."
+      },
+      "cited_page": 4,
+      "is_ocr": {"4": false, "5": false},
+      "expected_verified": true,
+      "expected_page": 4
+    },
+    {
+      "id": "P07-found-on-other_page-corrected",
+      "quote": "Гарантия на поставляемое оборудование предоставляется",
+      "pages": {
+        "1": "Оглавление документа.",
+        "2": "Гарантия на поставляемое оборудование предоставляется производителем.",
+        "6": "Прочие сведения о закупке."
+      },
+      "cited_page": 6,
+      "is_ocr": {"1": false, "2": false, "6": false},
+      "expected_verified": true,
+      "expected_page": 2
+    },
+    {
+      "id": "P08-guillemets-vs-straight-quotes",
+      "quote": "ООО «Demotex» является производителем",
+      "pages": {"1": "Сведения: ООO \"Demotex\" является производителем техники."},
+      "cited_page": 1,
+      "is_ocr": {"1": false},
+      "expected_verified": true,
+      "expected_page": 1
+    },
+    {
+      "id": "P09-yo-and-ye",
+      "quote": "Ёмкость аккумулятора не менее 5000 мАч",
+      "pages": {"1": "Емкость аккумулятора не менее 5000 мАч, гарантия 1 год."},
+      "cited_page": 1,
+      "is_ocr": {"1": false},
+      "expected_verified": true,
+      "expected_page": 1
+    },
+    {
+      "id": "P10-latin-o-inside-russian-word",
+      "quote": "Испoлнение договора гарантируется банком",
+      "pages": {"1": "Исполнение договора гарантируется банком-партнером по гарантии."},
+      "cited_page": 1,
+      "is_ocr": {"1": false},
+      "expected_verified": true,
+      "expected_page": 1
+    },
+    {
+      "id": "P11-dash-variants-in-range",
+      "quote": "срок поставки составляет 10-20 дней",
+      "pages": {"1": "Срок поставки составляет 10–20 дней с момента оплаты."},
+      "cited_page": 1,
+      "is_ocr": {"1": false},
+      "expected_verified": true,
+      "expected_page": 1
+    },
+    {
+      "id": "P12-markdown-table-pipes",
+      "quote": "Мощность | 2500 Вт | Гарантия 12 месяцев",
+      "pages": {"1": "| Мощность | 2500 Вт | Гарантия 12 месяцев |\n|---|---|---|"},
+      "cited_page": 1,
+      "is_ocr": {"1": false},
+      "expected_verified": true,
+      "expected_page": 1
+    },
+    {
+      "id": "P13-ocr-page-small-noise-fuzzy",
+      "quote": "Требуемая мощность: 2500 Вт для принтера.",
+      "pages": {"1": "Оглавление.", "2": "Требуемая мощностъ: 2500 Вт для принтера."},
+      "cited_page": 2,
+      "is_ocr": {"1": false, "2": true},
+      "expected_verified": true,
+      "expected_page": 2
+    },
+    {
+      "id": "P14-ocr-page-adjacent-fuzzy",
+      "quote": "Требуемая мощность: 2500 Вт для принтера.",
+      "pages": {"2": "Раздел требований.", "3": "Требуемая мощностъ: 2500 Вт для принтера."},
+      "cited_page": 2,
+      "is_ocr": {"2": false, "3": true},
+      "expected_verified": true,
+      "expected_page": 3
+    },
+    {
+      "id": "N01-number-changed-text-page",
+      "quote": "Мощность принтера не менее 2200 Вт.",
+      "pages": {"1": "Мощность принтера не менее 2500 Вт."},
+      "cited_page": 1,
+      "is_ocr": {"1": false},
+      "expected_verified": false
+    },
+    {
+      "id": "N02-too-short",
+      "quote": "2500 Вт",
+      "pages": {"1": "Мощность принтера 2500 Вт."},
+      "cited_page": 1,
+      "is_ocr": {"1": false},
+      "expected_verified": false
+    },
+    {
+      "id": "N03-absent-from-document",
+      "quote": "Срок поставки не более тридцати дней со дня подписания",
+      "pages": {"1": "Оплата производится в течение пяти рабочих дней.", "2": "Гарантия 12 месяцев."},
+      "cited_page": 1,
+      "is_ocr": {"1": false, "2": false},
+      "expected_verified": false
+    },
+    {
+      "id": "N04-paraphrase-is-not-a-quote",
+      "quote": "Гарантия составляет три года со дня поставки",
+      "pages": {"1": "Гарантийный срок 36 месяцев со дня поставки."},
+      "cited_page": 1,
+      "is_ocr": {"1": false},
+      "expected_verified": false
+    },
+    {
+      "id": "N05-ocr-page-number-changed",
+      "quote": "Требуемая мощность: 2500 Вт для принтера.",
+      "pages": {"1": "Требуемая мощность: 2200 Вт для принтера."},
+      "cited_page": 1,
+      "is_ocr": {"1": true},
+      "expected_verified": false
+    },
+    {
+      "id": "N06-text-page-one-letter-typo-not-fuzzy",
+      "quote": "Требуемая мощность: 2500 Вт для принтера.",
+      "pages": {"1": "Требуемая мощностъ: 2500 Вт для принтера."},
+      "cited_page": 1,
+      "is_ocr": {"1": false},
+      "expected_verified": false
+    },
+    {
+      "id": "N07-large-amount-digit-changed",
+      "quote": "Стоимость лота составляет 150 000 000 сум",
+      "pages": {"1": "Стоимость лота составляет 150 000 001 сум."},
+      "cited_page": 1,
+      "is_ocr": {"1": false},
+      "expected_verified": false
+    },
+    {
+      "id": "N08-ocr-page-far-from-cited",
+      "quote": "Требуемая мощность: 2500 Вт для принтера.",
+      "pages": {"1": "Оглавление.", "2": "Раздел.", "9": "Требуемая мощностъ: 2500 Вт для принтера."},
+      "cited_page": 2,
+      "is_ocr": {"1": false, "2": false, "9": true},
+      "expected_verified": false
+    },
+    {
+      "id": "N09-latin-model-code-differs",
+      "quote": "Model XYZ-2000 supplied with cable",
+      "pages": {"1": "Offered: model XYZ-2001 supplied with cable and bag."},
+      "cited_page": 1,
+      "is_ocr": {"1": false},
+      "expected_verified": false
+    },
+    {
+      "id": "N10-date-year-changed",
+      "quote": "Срок действия сертификата до 05.10.2026.",
+      "pages": {"1": "Срок действия сертификата до 05.10.2025."},
+      "cited_page": 1,
+      "is_ocr": {"1": false},
+      "expected_verified": false
+    },
+    {
+      "id": "N11-negation-dropped",
+      "quote": "Участник не соответствует требованиям тендера.",
+      "pages": {"1": "Участник соответствует требованиям тендера."},
+      "cited_page": 1,
+      "is_ocr": {"1": false},
+      "expected_verified": false
+    },
+    {
+      "id": "N12-ocr-quote-number-missing-from-page",
+      "quote": "Гарантийный срок составляет 36 месяцев с даты поставки.",
+      "pages": {"1": "Гарантийный срок составляет месяцев с даты поставки."},
+      "cited_page": 1,
+      "is_ocr": {"1": true},
+      "expected_verified": false
+    }
+  ]
+}
