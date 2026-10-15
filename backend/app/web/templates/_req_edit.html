@@ -1,0 +1,43 @@
+{# One requirement in edit mode: type, parameter, value, excluded. Saved with HTMX as a row swap. #}
+<tr id="req-{{ req.id }}" class="editing">
+  <td colspan="10">
+    <form method="post" action="/projects/{{ pid }}/checklist/requirements/{{ req.id }}"
+          hx-post="/projects/{{ pid }}/checklist/requirements/{{ req.id }}"
+          hx-target="#req-{{ req.id }}" hx-swap="outerHTML"
+          class="edit-form">
+      <p class="small"><strong class="code">{{ req.code }}</strong> · {{ t('checklist.col.source') }}: {{ req.source_quote or t('common.none') }}</p>
+      <div class="form-grid">
+        <label>{{ t('checklist.field.req_type') }}
+          <select name="req_type">
+            {% for rt in ['mandatory', 'scored', 'desirable'] %}
+              <option value="{{ rt }}" {% if req.req_type == rt %}selected{% endif %}>{{ t('req_type.' ~ rt) }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="wide">{{ t('checklist.field.parameter') }}
+          <input type="text" name="parameter" value="{{ req.parameter }}" required maxlength="500">
+        </label>
+        {% if draft %}
+        <label>{{ t('checklist.field.verification') }}
+          <select name="verification">
+            {% for v in ['documents', 'platform'] %}
+              <option value="{{ v }}" {% if (req.verification or 'documents') == v %}selected{% endif %}>{{ t('checklist.verification.' ~ v) }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        {% endif %}
+        <label>{{ t('checklist.field.value') }}
+          <input type="text" name="value" value="{{ req.value or '' }}">
+        </label>
+        <label class="check"><input type="checkbox" name="excluded" value="true" {% if req.excluded %}checked{% endif %}> {{ t('checklist.field.excluded') }}</label>
+      </div>
+      {% if row_error %}<div class="alert alert-error" role="alert">{{ row_error }}</div>{% endif %}
+      <div class="actions">
+        <button type="submit" class="btn primary">{{ t('common.save') }}</button>
+        <a class="btn" href="/projects/{{ pid }}/checklist"
+           hx-get="/projects/{{ pid }}/checklist/requirements/{{ req.id }}/row"
+           hx-target="#req-{{ req.id }}" hx-swap="outerHTML">{{ t('common.cancel') }}</a>
+      </div>
+    </form>
+  </td>
+</tr>

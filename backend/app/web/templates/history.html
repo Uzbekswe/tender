@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}{{ t('history.title') }}{% if project_name %} · {{ project_name }}{% endif %}{% endblock %}
+{% block content %}
+{% if project_id %}<p><a href="/projects/{{ project_id }}">{{ t('compare.back') }}</a></p>{% endif %}
+<h1>{{ t('history.title') }}</h1>
+{% if project_name %}<p class="muted">{{ project_name }}</p>{% endif %}
+
+<section class="card">
+  {% if runs %}
+    {% if runs|length > 1 %}
+    <div class="trend">
+      <p><strong>{{ t('history.trend', trend=trend) }}</strong></p>
+      {% if sparkline %}<figure class="spark"><span role="img" aria-label="{{ sparkline_label }}">{{ sparkline }}</span><figcaption class="small muted">{{ sparkline_label }}</figcaption></figure>{% endif %}
+    </div>
+    {% endif %}
+    <div class="table-wrap">
+      <table class="data history">
+        <thead>
+          <tr>
+            <th>{{ t('history.col.run') }}</th>
+            <th>{{ t('history.col.date') }}</th>
+            <th>{{ t('history.col.score') }}</th>
+            <th>{{ t('history.col.verdict') }}</th>
+            <th>{{ t('history.col.changes') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for r in runs %}
+          <tr>
+            <td data-label="{{ t('history.col.run') }}"><a href="/runs/{{ r.run_id }}/compare">#{{ r.run_id }}</a> <a class="small" href="/runs/{{ r.run_id }}/summary">{{ t('nav.summary') }}</a></td>
+            <td data-label="{{ t('history.col.date') }}">{{ r.date }}</td>
+            <td data-label="{{ t('history.col.score') }}">{{ r.overall }}</td>
+            <td data-label="{{ t('history.col.verdict') }}">{{ r.verdict }}</td>
+            <td data-label="{{ t('history.col.changes') }}">
+              {% if r.first %}
+                <span class="muted small">{{ t('history.first') }}</span>
+              {% elif r.changes %}
+                <ul class="history-changes">
+                  {% for c in r.changes %}<li class="code">{{ c.text }}{% if c.parameter %} <span class="muted small">{{ c.parameter }}</span>{% endif %}</li>{% endfor %}
+                </ul>
+              {% else %}
+                <span class="muted small">{{ t('history.no_changes') }}</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="muted">{{ t('history.empty') }}</p>
+  {% endif %}
+</section>
+{% endblock %}
