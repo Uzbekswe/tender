@@ -1,0 +1,36 @@
+{# One requirement, read-only view. HTMX swaps this row in place after an edit. #}
+<tr id="req-{{ req.id }}" class="{% if req.excluded %}excluded{% endif %}">
+  <td><input type="checkbox" name="ids" value="{{ req.id }}" form="merge-form" aria-label="{{ req.code }}"></td>
+  <td data-label="{{ t('checklist.col.code') }}" class="code">{{ req.code }}</td>
+  <td data-label="{{ t('checklist.col.type') }}">
+    <span class="badge badge-type-{{ req.req_type }}">{{ t('req_type.' ~ req.req_type) }}</span>
+    {% if req.verification == 'platform' %}<span class="badge badge-platform">{{ t('checklist.badge.platform') }}</span>{% endif %}
+    {% if req.excluded %}<span class="badge badge-muted">{{ t('checklist.excluded') }}</span>{% endif %}
+  </td>
+  <td data-label="{{ t('checklist.col.scope') }}">{{ t('checklist.scope.' ~ req.scope) }}</td>
+  <td data-label="{{ t('checklist.col.parameter') }}">
+    {% set name = display_name(req.parameter, req.parameter_ru, lang) %}
+    {{ name }}
+    {% if req.parameter.strip() and req.parameter.strip() != name %}<div class="muted small">{{ req.parameter }}</div>{% endif %}
+    {# "keep" is the default: only actionable suggestions get a badge. A keep with a type fix is actionable. #}
+    {% if req.suggestion and (req.suggestion.decision != "keep" or req.suggestion.type_fix or (req.suggestion.platform_check and req.verification != 'platform')) %}{% include "_suggestion.html" %}{% endif %}
+  </td>
+  <td data-label="{{ t('checklist.col.condition') }}">
+    {{ t('op.' ~ req.operator) }}{% if req.value %} {{ req.value }}{% endif %}{% if req.value_max %} – {{ req.value_max }}{% endif %}{% if req.unit %} {{ req.unit }}{% endif %}
+  </td>
+  <td data-label="{{ t('checklist.col.confirmation') }}">{{ req.confirmation_method or t('common.none') }}</td>
+  <td data-label="{{ t('checklist.col.source') }}">
+    {% if req.source_page_id %}
+      <a href="/api/v1/pages/{{ req.source_page_id }}/image" target="_blank" rel="noopener">{{ req.file_name or '' }}{% if req.page_number %} · p.{{ req.page_number }}{% endif %}</a>
+    {% else %}{{ t('common.none') }}{% endif %}
+    {% if req.source_quote %}
+      <blockquote>{{ req.source_quote }}{% if req.source_page_id %} <span class="verified" title="{{ t('checklist.verified') }}" aria-label="{{ t('checklist.verified') }}">✓</span>{% endif %}</blockquote>
+    {% endif %}
+  </td>
+  <td data-label="{{ t('checklist.col.confidence') }}">{{ req.confidence|round(0)|int }}</td>
+  <td data-label="{{ t('checklist.col.actions') }}">
+    <a class="btn small" href="/projects/{{ pid }}/checklist/requirements/{{ req.id }}/edit"
+       hx-get="/projects/{{ pid }}/checklist/requirements/{{ req.id }}/edit"
+       hx-target="#req-{{ req.id }}" hx-swap="outerHTML">{{ t('common.edit') }}</a>
+  </td>
+</tr>

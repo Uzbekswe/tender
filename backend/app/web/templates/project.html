@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}{{ project.name }}{% endblock %}
+{% block content %}
+<p><a href="/">{{ t('project.back') }}</a></p>
+<h1>{{ project.name }}</h1>
+{% if project.customer %}<p class="muted">{{ project.customer }}</p>{% endif %}
+
+{% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+{% if notice %}<div class="alert alert-ok" role="status">{{ notice }}</div>{% endif %}
+
+<section class="card">
+  <h2>{{ t('deadline.title') }}</h2>
+  {% if not project.submission_deadline %}
+    <div class="alert alert-warn" role="alert"><strong>{{ t('deadline.missing') }}</strong></div>
+  {% else %}
+    <p>
+      <strong>{{ deadline_text }}</strong>
+      <span class="muted">· {{ t('deadline.' ~ deadline.state, n=deadline.days) }}</span>
+    </p>
+  {% endif %}
+  <form method="post" action="/projects/{{ project.id }}/deadline" class="inline-form">
+    <input type="datetime-local" name="submission_deadline" value="{{ deadline_input }}" aria-label="{{ t('deadline.title') }}">
+    <button type="submit" class="btn">{{ t('deadline.save') }}</button>
+  </form>
+</section>
+
+<div class="grid-2">
+  {% for zone in [
+      {'title': t('project.zone.customer'), 'package': tender, 'docs': tender_docs},
+      {'title': t('project.zone.bid'), 'package': bid, 'docs': bid_docs}
+  ] %}
+  <section class="card">
+    <h2>{{ zone.title }}</h2>
+    <form class="dropzone" method="post"
+          action="/projects/{{ project.id }}/packages/{{ zone.package.id }}/upload"
+          enctype="multipart/form-data"
+          data-zone
+          data-uploading="{{ t('project.zone.uploading') }}"
+          data-failed="{{ t('project.zone.failed') }}">
+      <p class="muted">{{ t('project.zone.hint') }}</p>
+      <input type="file" name="files" multiple class="file-input" aria-label="{{ zone.title }}">
+      <button type="submit" class="btn primary">{{ t('project.zone.upload') }}</button>
+      <div class="progress" hidden><div class="bar"></div></div>
+      <p class="zone-msg" role="status"></p>
+    </form>
+
+    {% if zone.docs %}
+    <div class="table-wrap">
+    <table class="data docs">
+      <thead>
+        <tr>
+          <th>{{ t('project.docs.file') }}</th>
+          <th>{{ t('project.docs.type') }}</th>
+          <th>{{ t('project.docs.warnings') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for d in zone.docs %}
+        <tr>
+          <td data-label="{{ t('project.docs.file') }}">
+            {{ d.file_name }}
+            {% if d.path_in_archive %}<div class="muted small">{{ d.path_in_archive }}</div>{% endif %}
+            {% if d.page_count %}<div class="muted small">{{ d.page_count }} {{ t('project.docs.pages') }}</div>{% endif %}
+          </td>
+          <td data-label="{{ t('project.docs.type') }}">
+            <form method="post" action="/projects/{{ project.id }}/documents/{{ d.id }}/doc-type" class="inline-form">
+              <select name="doc_type" aria-label="{{ t('project.docs.type') }}">
+                {% if not d.doc_type %}<option value="" selected>{{ t('project.docs.undetected') }}</option>{% endif %}
+                {% for dt in doc_types %}
+                  <option value="{{ dt }}" {% if d.doc_type == dt %}selected{% endif %}>{{ t('doc_type.' ~ dt) }}</option>
+                {% endfor %}
+              </select>
+              <button type="submit" class="btn small">{{ t('project.docs.save') }}</button>
+            </form>
+          </td>
+          <td data-label="{{ t('project.docs.warnings') }}">
+            {% for w in d.warnings %}
+              <div class="warn-line">{% if w is mapping %}{{ w.get('message', w) }}{% else %}{{ w }}{% endif %}</div>
+            {% else %}
+              {{ t('common.none') }}
+            {% endfor %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+    <p class="muted">{{ t('project.docs.empty') }}</p>
+    {% endif %}
+  </section>
+  {% endfor %}
+</div>
+
+<section class="card">
+  <h2>{{ t('project.actions.title') }}</h2>
+  <div class="actions">
+    <form method="post" action="/projects/{{ project.id }}/packages/{{ tender.id }}/runs" class="inline-form">
+      <button type="submit" class="btn primary">{{ t('project.actions.analyse') }}</button>
+    </form>
+    <form method="post" action="/projects/{{ project.id }}/packages/{{ bid.id }}/runs" class="inline-form">
+      <button type="submit" class="btn primary" {% if not approved %}disabled aria-disabled="true"{% endif %}>{{ t('project.actions.check_bid') }}</button>
+    </form>
+    <a class="btn" href="/projects/{{ project.id }}/checklist">{{ t('project.actions.open_checklist') }}</a>
+  </div>
+  {% if not approved %}<p class="muted">{{ t('project.actions.check_bid_locked') }}</p>{% endif %}
+</section>
+
+<section>
+  <h2>{{ t('project.runs.title') }}</h2>
+  {% if panels %}
+    {% for panel in panels %}
+      {% include "_run_panel.html" %}
+    {% endfor %}
+  {% else %}
+    <p class="muted">{{ t('project.runs.empty') }}</p>
+  {% endif %}
+</section>
+
+<script>
+(function () {
+  document.querySelectorAll('form[data-zone]').forEach(function (form) {
+    var input = form.querySelector('input[type=file]');
+    var bar = form.querySelector('.progress');
+    var fill = bar.querySelector('.bar');
+    var msg = form.querySelector('.zone-msg');
+
+    function send(files) {
+      if (!files || !files.length) return;
+      var data = new FormData();
+      for (var i = 0; i < files.length; i++) data.append('files', files[i]);
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', form.action);
+      bar.hidden = false;
+      fill.style.width = '0%';
+      msg.textContent = form.dataset.uploading;
+      xhr.upload.onprogress = function (e) {
+        if (e.lengthComputable) fill.style.width = Math.round(100 * e.loaded / e.total) + '%';
+      };
+      xhr.onload = function () {
+        if (xhr.status < 400) { window.location.reload(); }
+        else { msg.textContent = form.dataset.failed; }
+      };
+      xhr.onerror = function () { msg.textContent = form.dataset.failed; };
+      xhr.send(data);
+    }
+
+    form.addEventListener('submit', function (e) {
+      if (input.files && input.files.length) { e.preventDefault(); send(input.files); }
+    });
+    form.addEventListener('dragover', function (e) { e.preventDefault(); form.classList.add('over'); });
+    form.addEventListener('dragleave', function () { form.classList.remove('over'); });
+    form.addEventListener('drop', function (e) {
+      e.preventDefault();
+      form.classList.remove('over');
+      if (e.dataTransfer && e.dataTransfer.files.length) send(e.dataTransfer.files);
+    });
+  });
+})();
+</script>
+{% endblock %}

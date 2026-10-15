@@ -7,19 +7,24 @@ CORS is not enabled: the UI is served from this same app.
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from app.api.checklist import router as checklist_router
 from app.api.llm_status import router as llm_status_router
 from app.api.projects import router as api_router
 from app.api.results import router as results_router
+from app.web.routes import router as web_router
 from app.db import init_db
 from app.runner import runner
 import engine.pipeline  # noqa: F401  (registers reading stages)
 import engine.tender_stages  # noqa: F401  (registers tender stages after reading)
 import engine.bid_stages  # noqa: F401  (registers bid stages after reading)
 import engine.score_stages  # noqa: F401  (registers the score stage after assess)
+
+STATIC_DIR = Path(__file__).resolve().parent / "web" / "static"
 
 
 @asynccontextmanager
@@ -37,6 +42,8 @@ app.include_router(api_router)
 app.include_router(checklist_router)
 app.include_router(results_router)
 app.include_router(llm_status_router)
+app.include_router(web_router)
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 @app.get("/health")

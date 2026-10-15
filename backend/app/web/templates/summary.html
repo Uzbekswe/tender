@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}{{ t('summary.title') }} · {{ project_name }}{% endblock %}
+{% block content %}
+{% macro item_line(s) -%}
+  <article class="sum-item">
+    <p>
+      <a class="code" href="{{ s.href }}">{{ s.code }}</a> {{ s.parameter }}
+      <span class="chip status-{{ s.status }}">{{ s.status_label }}</span>
+      {% if s.impact %}<span class="muted small">{{ t('compare.panel.impact') }} {{ s.impact }}</span>{% endif %}
+    </p>
+    {% if s.problem %}<p class="small">{{ s.problem }}</p>{% endif %}
+    {% if s.action %}<p class="small"><strong>{{ t('compare.panel.action') }}:</strong> {{ s.action }}</p>{% endif %}
+  </article>
+{%- endmacro %}
+
+<p><a href="/projects/{{ project_id }}">{{ t('compare.back') }}</a></p>
+<h1>{{ project_name }}</h1>
+{% include "_run_nav.html" %}
+
+<section class="card sum-head">
+  <p class="sum-headline">{{ headline or t('compare.not_scored') }}</p>
+  <div class="sum-downloads">
+    <strong>{{ t('summary.downloads') }}</strong>
+    <a class="btn" href="{{ xlsx_url }}" download>{{ t('summary.download.xlsx') }}</a>
+    <a class="btn" href="{{ clarification_url }}" download>{{ t('summary.download.clarification') }}</a>
+  </div>
+</section>
+
+<section class="card">
+  <h2>{{ t('summary.section.critical') }} <span class="muted small">({{ critical|length }})</span></h2>
+  <p class="muted small">{{ t('summary.section.critical_hint') }}</p>
+  {% for s in critical %}{{ item_line(s) }}{% else %}<p class="muted">{{ t('summary.empty') }}</p>{% endfor %}
+</section>
+
+<section class="card">
+  <h2>{{ t('summary.section.score') }} <span class="muted small">({{ reducing|length }})</span></h2>
+  {% for s in reducing %}{{ item_line(s) }}{% else %}<p class="muted">{{ t('summary.empty') }}</p>{% endfor %}
+</section>
+
+<section class="card">
+  <h2>{{ t('summary.section.risks') }}</h2>
+  <h3>{{ t('summary.risks.review') }} <span class="muted small">({{ review|length }})</span></h3>
+  {% for s in review %}{{ item_line(s) }}{% else %}<p class="muted">{{ t('summary.empty') }}</p>{% endfor %}
+  <h3>{{ t('summary.risks.contradictions') }} <span class="muted small">({{ contradictions|length }})</span></h3>
+  {% for c in contradictions %}<p class="small">{{ c.text }}</p>{% else %}<p class="muted">{{ t('summary.empty') }}</p>{% endfor %}
+  <h3>{{ t('summary.risks.questions') }} <span class="muted small">({{ questions|length }})</span></h3>
+  {% for q in questions %}<p class="small"><span class="badge">{{ q.kind }}</span> {{ q.text }}</p>{% else %}<p class="muted">{{ t('summary.empty') }}</p>{% endfor %}
+</section>
+
+<section class="card">
+  <h2>{{ t('summary.section.strengths') }} <span class="muted small">({{ strengths|length }})</span></h2>
+  {% for s in strengths %}{{ item_line(s) }}{% else %}<p class="muted">{{ t('summary.empty') }}</p>{% endfor %}
+</section>
+
+{% if platform %}
+<section class="card platform-sum">
+  <h2>{{ t('summary.section.platform') }} <span class="muted small">({{ platform|length }})</span></h2>
+  <p class="muted small">{{ t('summary.section.platform_hint') }}</p>
+  {% for p in platform %}
+    <article class="sum-item">
+      <p>
+        <span class="{{ 'verified' if p.confirmed else 'muted' }}" aria-hidden="true">{{ '✓' if p.confirmed else '☐' }}</span>
+        <a class="code" href="{{ p.href }}">{{ p.code }}</a> {{ p.parameter }}
+        <span class="muted small">{{ t('platform.state.confirmed') if p.confirmed else t('platform.state.pending') }}</span>
+      </p>
+      {% if p.page is not none %}<p class="small muted">{{ t('compare.panel.page') }} {{ p.page }}</p>{% endif %}
+    </article>
+  {% endfor %}
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>{{ t('summary.section.plan') }}</h2>
+  {% if plan %}
+  <div class="table-wrap">
+    <table class="data">
+      <thead>
+        <tr>
+          <th>{{ t('checklist.col.code') }}</th>
+          <th>{{ t('compare.panel.problem') }}</th>
+          <th>{{ t('compare.panel.action') }}</th>
+          <th>{{ t('compare.panel.action_type') }}</th>
+          <th>{{ t('compare.panel.impact') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for s in plan %}
+        <tr>
+          <td data-label="{{ t('checklist.col.code') }}" class="code"><a href="{{ s.href }}">{{ s.code }}</a></td>
+          <td data-label="{{ t('compare.panel.problem') }}">{{ s.problem }}</td>
+          <td data-label="{{ t('compare.panel.action') }}">{{ s.action }}</td>
+          <td data-label="{{ t('compare.panel.action_type') }}">{{ s.action_type }}</td>
+          <td data-label="{{ t('compare.panel.impact') }}">{{ s.impact }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <p class="muted">{{ t('summary.empty') }}</p>
+  {% endif %}
+</section>
+
+<section class="card collect">
+  <h2>{{ t('summary.section.collect') }} <span class="muted small">({{ collect|length }})</span></h2>
+  {% if collect %}
+    <p class="muted small">{{ t('summary.collect_hint') }}</p>
+    {% for e in collect %}
+      <label><input type="checkbox"> <span><span class="code">{{ e.code }}</span> {{ e.parameter }}: {{ e.action }} <span class="muted small">({{ e.impact }})</span></span></label>
+    {% endfor %}
+  {% else %}
+    <p class="muted">{{ t('summary.empty') }}</p>
+  {% endif %}
+</section>
+{% endblock %}

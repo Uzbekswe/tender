@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}{{ t('compare.title') }} · {{ project_name }}{% endblock %}
+{% block content %}
+<p><a href="/projects/{{ project_id }}">{{ t('compare.back') }}</a></p>
+<h1>{{ project_name }}</h1>
+{% include "_run_nav.html" %}
+
+{% if top.scored %}
+  {% include "_compare_top.html" %}
+  {% if platform_card %}{% include "_compare_platform.html" %}{% endif %}
+  <div class="compare">
+    <aside class="card cmp-side" aria-labelledby="cmp-list-h">
+      <h2 id="cmp-list-h">{{ t('compare.list.title') }}</h2>
+      <form method="get" action="/runs/{{ run_id }}/compare" class="filters cmp-filters">
+        <input type="hidden" name="filtered" value="1">
+        <input type="hidden" name="status" value="{{ filters.status }}">
+        <label class="check"><input type="checkbox" name="issues" value="1" {% if filters.only_issues %}checked{% endif %}> {{ t('compare.filter.issues') }}</label>
+        <label>{{ t('compare.filter.scope') }}
+          <select name="scope">
+            <option value="" {% if not filters.scope %}selected{% endif %}>{{ t('compare.all') }}</option>
+            {% for s in ('goods', 'bidder') %}
+              <option value="{{ s }}" {% if filters.scope == s %}selected{% endif %}>{{ t('checklist.scope.' ~ s) }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <button type="submit" class="btn small">{{ t('compare.filter.apply') }}</button>
+      </form>
+      {% if rows %}
+        <ul class="cmp-list">
+          {% for row in rows %}{% include "_compare_row.html" %}{% endfor %}
+        </ul>
+      {% else %}
+        <p class="muted">{{ t('compare.list.empty') }}</p>
+      {% endif %}
+    </aside>
+
+    <section class="cmp-main">
+      {% if detail %}
+        {% with d = detail %}{% include "_compare_detail.html" %}{% endwith %}
+      {% else %}
+        <div class="card"><p class="muted">{{ t('compare.panel.empty') }}</p></div>
+      {% endif %}
+    </section>
+  </div>
+{% else %}
+  <div class="alert alert-warn" role="status">{{ t('compare.not_scored') }}</div>
+{% endif %}
+
+<script>
+(function () {
+  // Keep the selected row highlighted after an HTMX swap of the panel.
+  document.body.addEventListener('htmx:afterSwap', function () {
+    var panel = document.getElementById('compare-panel');
+    if (!panel) return;
+    var id = panel.getAttribute('data-req');
+    document.querySelectorAll('.cmp-item').forEach(function (a) {
+      a.classList.toggle('selected', a.getAttribute('data-req') === id);
+    });
+  });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,102 @@
+{# The checklist body: alerts, status and counts, filters, merge bar and the table. Rendered inside the
+   checklist page, and returned alone to HTMX after an apply (the #checklist-main element is swapped). #}
+<div id="checklist-main">
+{% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+{% if notice %}<div class="alert alert-ok" role="status">{{ notice }}</div>{% endif %}
+
+{% if not checklist %}
+  <p class="muted">{{ t('checklist.none') }}</p>
+{% else %}
+  {% set version = checklist.version %}
+  {% set draft = version.status == 'draft' %}
+  {% set sug = checklist.suggestion_counts %}
+  {% set sug_total = sug.exclude + sug.merge_into + sug.type_fix + (sug.platform_check or 0) %}
+  <section class="card status-row">
+    {% if version.status == 'approved' %}
+      <span class="badge badge-approved">{{ t('checklist.version.approved', n=version.number) }}</span>
+      <form method="post" action="/projects/{{ pid }}/checklist/new-version" class="inline-form">
+        <button type="submit" class="btn">{{ t('checklist.new_version') }}</button>
+      </form>
+      <span class="muted small">{{ t('checklist.new_version_hint') }}</span>
+    {% else %}
+      <span class="badge badge-draft">{{ t('checklist.version.draft', n=version.number) }}</span>
+      <form method="post" action="/projects/{{ pid }}/checklist/approve" class="inline-form">
+        <button type="submit" class="btn primary">{{ t('checklist.approve') }}</button>
+      </form>
+      <form method="post" action="/projects/{{ pid }}/checklist/apply-suggestions" class="inline-form"
+            hx-post="/projects/{{ pid }}/checklist/apply-suggestions"
+            hx-include="#checklist-filters" hx-target="#checklist-main" hx-swap="outerHTML">
+        <button type="submit" class="btn" {% if sug_total == 0 %}disabled{% endif %}>{{ t('checklist.suggest.apply_all', n=sug_total) }}</button>
+      </form>
+    {% endif %}
+    {% if sug_total and not draft %}<span class="muted small">{{ t('checklist.suggest.readonly') }}</span>{% endif %}
+    <span class="muted small">{{ t('checklist.count', total=checklist.counts.total, mandatory=checklist.counts.mandatory, scored=checklist.counts.scored, desirable=checklist.counts.desirable, excluded=checklist.counts.excluded) }}{% if checklist.counts.platform %}{{ t('checklist.count.platform', n=checklist.counts.platform) }}{% endif %}</span>
+  </section>
+
+  <form id="checklist-filters" method="get" action="/projects/{{ pid }}/checklist" class="filters card">
+    <label>{{ t('checklist.filter.scope') }}
+      <select name="scope">
+        <option value="">{{ t('checklist.filter.all') }}</option>
+        {% for s in ['goods', 'bidder'] %}
+          <option value="{{ s }}" {% if filters.scope == s %}selected{% endif %}>{{ t('checklist.scope.' ~ s) }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>{{ t('checklist.filter.type') }}
+      <select name="req_type">
+        <option value="">{{ t('checklist.filter.all') }}</option>
+        {% for rt in ['mandatory', 'scored', 'desirable'] %}
+          <option value="{{ rt }}" {% if filters.req_type == rt %}selected{% endif %}>{{ t('req_type.' ~ rt) }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>{{ t('checklist.filter.category') }}
+      <select name="category">
+        <option value="">{{ t('checklist.filter.all') }}</option>
+        {% for code, label in categories %}
+          <option value="{{ code }}" {% if filters.category == code %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="check"><input type="checkbox" name="include_excluded" value="1" {% if filters.include_excluded %}checked{% endif %}> {{ t('checklist.filter.include_excluded') }}</label>
+    <label class="check"><input type="checkbox" name="suggested" value="1" {% if filters.suggested %}checked{% endif %}> {{ t('checklist.filter.suggested') }}</label>
+    <label class="check"><input type="checkbox" name="platform" value="1" {% if filters.platform %}checked{% endif %}> {{ t('checklist.filter.platform') }}</label>
+    <button type="submit" class="btn">{{ t('checklist.filter.apply') }}</button>
+  </form>
+
+  <form id="merge-form" method="post" action="/projects/{{ pid }}/checklist/merge" class="inline-form merge-bar">
+    <button type="submit" class="btn">{{ t('checklist.merge') }}</button>
+    <span class="muted small">{{ t('checklist.merge_hint') }}</span>
+  </form>
+
+  <div class="table-wrap">
+  <table class="data checklist">
+    <thead>
+      <tr>
+        <th aria-label="merge"></th>
+        <th>{{ t('checklist.col.code') }}</th>
+        <th>{{ t('checklist.col.type') }}</th>
+        <th>{{ t('checklist.col.scope') }}</th>
+        <th>{{ t('checklist.col.parameter') }}</th>
+        <th>{{ t('checklist.col.condition') }}</th>
+        <th>{{ t('checklist.col.confirmation') }}</th>
+        <th>{{ t('checklist.col.source') }}</th>
+        <th>{{ t('checklist.col.confidence') }}</th>
+        <th>{{ t('checklist.col.actions') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for req in checklist.requirements %}
+      {% if edit == req.id %}
+        {% include "_req_edit.html" %}
+      {% else %}
+        {% include "_req_row.html" %}
+      {% endif %}
+    {% else %}
+      <tr><td colspan="10" class="muted">{{ t('checklist.empty') }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+{% endif %}
+</div>

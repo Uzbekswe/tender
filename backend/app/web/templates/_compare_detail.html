@@ -1,0 +1,135 @@
+{# One requirement, both sides. Loaded into the comparison panel by HTMX, or rendered inside the full page.
+   The override form posts here with HTMX; the response replaces this panel. #}
+<section id="compare-panel" class="card panel" data-req="{{ d.id }}">
+  {% if notice %}<div class="alert alert-ok" role="status">{{ notice }}</div>{% endif %}
+  {% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+
+  <header class="panel-head">
+    <div>
+      <h2><span class="code">{{ d.code }}</span> {{ d.parameter }}</h2>
+      {% if d.parameter_original %}<div class="muted small">{{ d.parameter_original }}</div>{% endif %}
+    </div>
+    <div class="panel-badges">
+      <span class="badge badge-type-{{ d.type }}">{{ t('req_type.' ~ d.type) }}</span>
+      <span class="chip status-{{ d.status }}">{{ d.status_label }}</span>
+      {% if d.platform %}<span class="badge badge-platform">{{ t('checklist.badge.platform') }}</span>{% endif %}
+      {% if d.override %}<span class="badge badge-warn">{{ t('compare.override.badge') }}</span>{% endif %}
+    </div>
+  </header>
+
+  <div class="split">
+    <section class="side" aria-labelledby="tender-h-{{ d.id }}">
+      <h3 id="tender-h-{{ d.id }}">{{ t('compare.panel.tender') }}</h3>
+      <dl class="kv">
+        <dt>{{ t('checklist.col.condition') }}</dt><dd>{{ d.condition or t('common.none') }}</dd>
+        <dt>{{ t('checklist.col.confirmation') }}</dt><dd>{{ d.confirmation or t('common.none') }}</dd>
+      </dl>
+      {% if d.quote %}<blockquote>{{ d.quote }}</blockquote>{% endif %}
+      {% if d.platform and d.platform_page is not none %}
+        <p class="small muted">{{ t('compare.panel.page') }} {{ d.platform_page }}</p>
+      {% endif %}
+      {% if d.tender %}
+        <p class="small muted">{{ d.tender.file or '' }} · {{ t('compare.panel.page') }} {{ d.tender.page if d.tender.page is not none else t('common.none') }}</p>
+        <a href="{{ d.tender.image_url }}" target="_blank" rel="noopener">
+          <img class="page-img" src="{{ d.tender.image_url }}" alt="{{ t('compare.panel.page_image') }}" loading="lazy">
+        </a>
+        <div class="page-text" tabindex="0">{{ d.tender.marked }}</div>
+      {% elif not d.platform %}
+        <p class="muted">{{ t('compare.panel.no_tender_page') }}</p>
+      {% endif %}
+    </section>
+
+    {% if d.platform %}
+    <section class="side" aria-labelledby="bid-h-{{ d.id }}">
+      <h3 id="bid-h-{{ d.id }}">{{ t('compare.panel.bid') }}</h3>
+      <p class="platform-note">{{ t('platform.note') }}</p>
+    </section>
+    {% else %}
+    <section class="side" aria-labelledby="bid-h-{{ d.id }}">
+      <h3 id="bid-h-{{ d.id }}">{{ t('compare.panel.bid') }}</h3>
+      {% for e in d.evidence %}
+        <article class="evidence">
+          <p class="small">
+            <strong>{{ e.file or '' }}</strong> · {{ t('compare.panel.page') }} {{ e.page if e.page is not none else t('common.none') }} ·
+            {% if e.verified %}
+              <span class="verified">✓ {{ t('compare.panel.verified') }}</span>
+            {% else %}
+              <span class="muted">{{ t('compare.panel.not_verified') }}</span>
+            {% endif %}
+          </p>
+          <div class="excerpt">{{ e.excerpt }}</div>
+          <a class="small" href="{{ e.image_url }}" target="_blank" rel="noopener">{{ t('compare.panel.open_page') }}</a>
+        </article>
+      {% else %}
+        <p class="muted">{{ t('compare.panel.no_evidence') }}</p>
+      {% endfor %}
+    </section>
+    {% endif %}
+  </div>
+
+  {% if not d.platform %}
+  <div class="split">
+    <section class="side">
+      <h3>{{ t('compare.panel.reasons') }}</h3>
+      {% if d.reasons %}
+        <ul class="reasons">{% for r in d.reasons %}<li>{{ r.text }}</li>{% endfor %}</ul>
+      {% else %}
+        <p class="muted">{{ t('common.none') }}</p>
+      {% endif %}
+      {% if d.rationale %}
+        <h3>{{ t('compare.panel.rationale') }}</h3>
+        <p>{{ d.rationale }}</p>
+      {% endif %}
+      <h3>{{ t('common.confidence') }}: {{ d.confidence }}</h3>
+      {% if d.confidence_parts %}
+        <p class="small muted">{{ t('compare.panel.confidence_parts') }}</p>
+        <dl class="kv">
+          {% for p in d.confidence_parts %}<dt>{{ p.label }}</dt><dd>{{ p.value }}</dd>{% endfor %}
+        </dl>
+      {% endif %}
+      {% if d.searched.count %}
+        <h3>{{ t('compare.panel.searched') }}: {{ d.searched.count }}</h3>
+        <p class="small muted">{{ d.searched.text }}</p>
+      {% endif %}
+    </section>
+
+    <section class="side">
+      <h3>{{ t('compare.panel.recommendation') }}</h3>
+      {% if d.recommendation %}
+        <dl class="kv">
+          <dt>{{ t('compare.panel.problem') }}</dt><dd>{{ d.recommendation.problem }}</dd>
+          <dt>{{ t('compare.panel.action') }}</dt><dd>{{ d.recommendation.action }}</dd>
+          <dt>{{ t('compare.panel.action_type') }}</dt><dd>{{ d.recommendation.action_type }}</dd>
+          <dt>{{ t('compare.panel.criticality') }}</dt><dd>{{ d.recommendation.criticality }}</dd>
+          <dt>{{ t('compare.panel.impact') }}</dt><dd>{{ d.recommendation.impact }}</dd>
+        </dl>
+      {% else %}
+        <p class="muted">{{ t('compare.panel.no_recommendation') }}</p>
+      {% endif %}
+
+      {% if d.override %}
+        <p class="small muted">
+          {{ t('compare.panel.overridden', old=d.override.old, new=d.override.new) }}<br>
+          {{ t('compare.panel.override_by', user=d.override.user, at=d.override.at, comment=d.override.comment) }}
+        </p>
+      {% endif %}
+
+      <form class="override-form" method="post"
+            action="/runs/{{ run_id }}/compare/items/{{ d.id }}/override"
+            hx-post="/runs/{{ run_id }}/compare/items/{{ d.id }}/override"
+            hx-target="#compare-panel" hx-swap="outerHTML">
+        <h3>{{ t('compare.override.title') }}</h3>
+        <label>{{ t('compare.override.status') }}
+          <select name="status">
+            {% for o in d.options %}<option value="{{ o.value }}"{% if o.selected %} selected{% endif %}>{{ o.label }}</option>{% endfor %}
+          </select>
+        </label>
+        <label>{{ t('compare.override.comment') }}
+          <textarea name="comment" rows="3" maxlength="2000" required></textarea>
+        </label>
+        <div><button type="submit" class="btn primary">{{ t('compare.override.submit') }}</button></div>
+      </form>
+    </section>
+  </div>
+  {% endif %}
+</section>
