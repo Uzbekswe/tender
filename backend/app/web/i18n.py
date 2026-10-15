@@ -1,6 +1,6 @@
-"""UI strings for the web pages. Russian is the default; English is the second language.
+"""UI strings for the web pages. Russian is the default; Uzbek (Latin) and English are the other two.
 
-Strings live in backend/i18n/ru.json and en.json (flat keys). A missing key in the
+Strings live in backend/i18n/ru.json, uz.json and en.json (flat keys). A missing key in the
 chosen language falls back to Russian, then to the key itself.
 """
 
@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 I18N_DIR = Path(__file__).resolve().parents[2] / "i18n"
-LANGS = ("ru", "en")
+LANGS = ("ru", "uz", "en")
 DEFAULT_LANG = "ru"
 LANG_COOKIE = "lang"
 

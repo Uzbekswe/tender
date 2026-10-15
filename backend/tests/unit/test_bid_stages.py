@@ -471,6 +471,19 @@ def _set_verification(version_id: int, code: str, value: str) -> None:
         session.commit()
 
 
+def test_platform_rationale_follows_the_uzbek_report_language(data_dir: Path, llm: FakeLLM, font: str) -> None:
+    project_id, package_id, version_id = _setup(font)
+    _set_verification(version_id, "U-003", "platform")
+    with Session(db.get_engine()) as session:
+        session.get(Project, project_id).report_lang = "uz"
+        session.commit()
+
+    run = _run_row(_run_bid(package_id, version_id))
+    assert run.status == RunStatus.done, run.error
+    result = _results(run.id)["U-003"]
+    assert result.rationale == "Elektron platformada tekshiriladi, taklif hujjatlari boʻyicha emas."
+
+
 def test_platform_requirement_is_not_retrieved_or_matched(data_dir: Path, llm: FakeLLM, font: str) -> None:
     _, package_id, version_id = _setup(font)
     _set_verification(version_id, "U-003", "platform")  # the model would have answered it "satisfies"

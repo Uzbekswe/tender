@@ -766,6 +766,11 @@ def test_contradicting_requirements_exclude_the_less_strict_one() -> None:
         [_row("U-001", "Срок оферты", page=2), _row("U-002", "Срок оферты, иначе", page=5)],
         "U-002", "en", "Contradicts {other}; goes to the clarification letter.",
         id="otherwise-the-later-page-en"),
+    pytest.param(
+        [_row("U-001", "Макс. срок", operator="<=", value="30", page=2),
+         _row("U-002", "Макс. срок", operator="<=", value="45", page=3)],
+        "U-002", "uz", "{other} bilan ziddiyat; tushuntirish soʻrovi xatiga kiradi.",
+        id="two-maximums-uzbek"),
 ])
 def test_contradiction_rule_choice_and_language(rows, loser, lang, why_template) -> None:
     from engine.tender_stages import _validated_suggestions

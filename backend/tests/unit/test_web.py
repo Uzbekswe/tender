@@ -1305,3 +1305,41 @@ def test_project_create_rejects_an_impossible_date(client: TestClient) -> None:
     resp = client.post("/projects", data={"name": "Synthetic bad date", "submission_deadline": "2026-02-31"},
                        follow_redirects=False)
     assert resp.status_code == 422
+
+
+# ---------- Uzbek ----------
+
+def test_lang_route_switches_the_ui_to_uzbek(client: TestClient, seeded: dict[str, Any]) -> None:
+    switched = client.get("/lang/uz", follow_redirects=False)
+    assert 300 <= switched.status_code < 400
+    assert "lang=uz" in switched.headers["set-cookie"]
+    page = client.get(WEB)  # the TestClient keeps the cookie it was given
+    assert page.status_code == 200
+    assert '<html lang="uz">' in page.text
+    assert "Loyihalar" in page.text
+    assert 'class="on" hreflang="uz"' in page.text  # the UZ link is the active one
+    assert 'class="on" hreflang="ru"' not in page.text
+    project = client.get(f"/projects/{seeded['project']}")
+    assert "Buyurtmachi hujjatlari" in project.text
+
+
+def test_project_create_with_uzbek_report_language(client: TestClient) -> None:
+    _lang(client, "uz")
+    form = client.get(WEB)
+    assert '<option value="uz"' in form.text and "Oʻzbekcha" in form.text
+    resp = client.post(
+        "/projects", data={"name": "Synthetic uz lot", "report_lang": "uz"}, follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    project_id = int(resp.headers["location"].rsplit("/", 1)[-1])
+    with session_scope() as s:
+        assert s.get(Project, project_id).report_lang == "uz"
+    page = client.get(f"/projects/{project_id}")
+    assert page.status_code == 200 and "Buyurtmachi hujjatlari" in page.text
+
+
+def test_project_create_form_keeps_uzbek_selected_on_error(client: TestClient) -> None:
+    _lang(client, "uz")
+    resp = client.post("/projects", data={"name": "   ", "report_lang": "uz"}, follow_redirects=False)
+    assert resp.status_code == 422
+    assert '<option value="uz" selected' in resp.text

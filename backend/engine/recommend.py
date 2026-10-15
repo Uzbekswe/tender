@@ -143,6 +143,7 @@ def _allowed_texts(req: ReqView, evidence: Sequence[EvidenceRef]) -> list[str]:
 _CONDITION = {
     "ru": {">=": "не менее {v}{u}", "<=": "не более {v}{u}", "=": "равно {v}{u}", "range": "от {v} до {m}{u}"},
     "en": {">=": "at least {v}{u}", "<=": "at most {v}{u}", "=": "equal to {v}{u}", "range": "from {v} to {m}{u}"},
+    "uz": {">=": "kamida {v}{u}", "<=": "koʻpi bilan {v}{u}", "=": "{v}{u} ga teng", "range": "{v} dan {m}{u} gacha"},
 }
 
 # Templates use {req} (the requirement phrase) and {conf} (" (confirmation: ...)" or "").
@@ -319,6 +320,92 @@ _TEXT: dict[str, dict[str, tuple[str, str]]] = {
             "Attach a confirming document{conf}.",
         ),
     },
+    "uz": {
+        "VALUE_FAIL_GOODS": (
+            "Tovar xarakteristikasi {req} talabiga mos kelmaydi.",
+            "Tovarni talabga mos modelga almashtiring yoki buyurtmachidan tushuntirish soʻrang. Hujjatlardagi qiymatlarni oʻzgartirmang.",
+        ),
+        "VALUE_FAIL_CONFLICT": (
+            "Ishtirokchi maʼlumotlari taklif hujjatlarida bir-biriga mos kelmaydi: {req}.",
+            "Hujjatlarni ishonchli manbaga (roʻyxatdan oʻtish yoki taʼsis hujjatiga) koʻra bitta qiymatga keltiring. Qiymatlarni talabga moslab oʻzgartirmang.",
+        ),
+        "VALUE_FAIL_BIDDER": (
+            "Ishtirokchi maʼlumotlari {req} talabiga mos kelmaydi.",
+            "Talabni taklif topshirish muddatigacha bajarib boʻlmaydi. Buyurtmachidan shu shartlarda ishtirok etish mumkinligini aniqlang.",
+        ),
+        "ABSENT": (
+            "Taklifda {req} talabini tasdiqlovchi hujjat topilmadi.",
+            "Talabni tasdiqlovchi hujjatni taklifga qoʻshing{conf}.",
+        ),
+        "ATTRIBUTION": (
+            "Taklifdagi tasdiqlash ishtirokchiga emas, boshqa tashkilotga tegishli: {req}.",
+            "Ishtirokchining oʻz hujjatini ilova qiling{conf}. Agar subpudratchilikka ruxsat etilgan boʻlsa, buyurtmachidan tushuntirish soʻrang.",
+        ),
+        "WRONG_DOC_TYPE": (
+            "Taklifdagi hujjat tender talab qilgan turdagi emas: {req}.",
+            "Talab qilingan turdagi hujjatni ilova qiling{conf}.",
+        ),
+        "CLAIM_ONLY": (
+            "{req} talabi faqat ishtirokchining bayonoti bilan tasdiqlangan, hujjatlashtirish esa tasdiqlovchi hujjatni talab qiladi.",
+            "Tasdiqlovchi hujjatni ilova qiling{conf}.",
+        ),
+        "EXPIRED": (
+            "{req} talabini tasdiqlovchi hujjatning amal qilish muddati taklif topshirish muddatidan oldin tugagan.",
+            "Amal qiladigan hujjatni ilova qiling{conf}.",
+        ),
+        "PARTIAL_COVERAGE": (
+            "Taklif {req} talabini faqat qisman tasdiqlaydi.",
+            "Taklifni tasdiqlashning yetishmayotgan qismi bilan toʻldiring{conf}.",
+        ),
+        "CONTRADICTION": (
+            "Taklif hujjatlari {req} talabi uchun turli qiymatlarni koʻrsatadi.",
+            "Hujjatlarni ishonchli manbaga koʻra bitta qiymatga keltiring. Qiymatlarni talabga moslab oʻzgartirmang.",
+        ),
+        "CONTRADICTION_REVIEW": (
+            "Taklif hujjatlari {req} talabi uchun turli qiymatlarni koʻrsatadi.",
+            "Ikkala manbani qoʻlda tekshiring va qaysi qiymat toʻgʻri ekanligini aniqlang.",
+        ),
+        "EQUIVALENT_NEEDS_EXPERT": (
+            "Ekvivalent taklif qilingan, uning {req} talabiga mosligini ekspert baholashi kerak.",
+            "Buyurtmachidan bunday ekvivalent qabul qilinishi mumkinligini soʻrang.",
+        ),
+        "LLM_ERROR": (
+            "{req} talabini tekshirish yakunlanmadi.",
+            "Tekshiruvni qayta ishga tushiring yoki talabni qoʻlda tekshiring.",
+        ),
+        "UNREADABLE_IN_SCOPE": (
+            "{req} talabining tasdiqlanishi boʻlishi mumkin boʻlgan sahifalarni oʻqib boʻlmadi.",
+            "Koʻrsatilgan sahifalarni qoʻlda tekshiring.",
+        ),
+        "NO_DEADLINE": (
+            "Hujjatning amal qilish muddati bor, lekin loyihada taklif topshirish muddati koʻrsatilmagan: {req}.",
+            "Loyiha sozlamalarida taklif topshirish muddatini kiriting va tekshiruvni qayta ishga tushiring.",
+        ),
+        "QUOTE_UNVERIFIED": (
+            "{req} talabi tekshiruvi tayanadigan iqtibos sahifada topilmadi.",
+            "Sahifani qoʻlda tekshiring va natijani tasdiqlang yoki rad eting.",
+        ),
+        "NEEDS_REVIEW": (
+            "{req} talabi odam tomonidan tekshirilishi kerak.",
+            "Tasdiqlashni qoʻlda tekshiring.",
+        ),
+        "DOES_NOT_MEET_GOODS": (
+            "{req} talabi bajarilmagan.",
+            "Tovarni almashtiring yoki buyurtmachidan tushuntirish soʻrang. Hujjatlardagi qiymatlarni oʻzgartirmang.",
+        ),
+        "DOES_NOT_MEET": (
+            "{req} talabi taklif bilan tasdiqlanmagan.",
+            "Tasdiqlovchi hujjatni ilova qiling{conf}.",
+        ),
+        "PARTIAL": (
+            "{req} talabi faqat qisman tasdiqlangan.",
+            "Tasdiqlashni toʻldiring{conf}.",
+        ),
+        "NOT_CONFIRMED": (
+            "{req} talabi tasdiqlanmagan.",
+            "Tasdiqlovchi hujjatni ilova qiling{conf}.",
+        ),
+    },
 }
 
 _FALLBACK = {
@@ -330,11 +417,15 @@ _FALLBACK = {
         "The requirement is not confirmed; check it by hand.",
         "Check the requirement by hand.",
     ),
+    "uz": (
+        "Talab tasdiqlanmagan; uni qoʻlda tekshiring.",
+        "Talabni qoʻlda tekshiring.",
+    ),
 }
 
 
 def _lang(lang: str) -> str:
-    return "en" if lang == "en" else "ru"
+    return lang if lang in ("ru", "uz", "en") else "ru"
 
 
 def _phrase(req: ReqView, lang: str) -> str:
@@ -354,7 +445,7 @@ def _phrase(req: ReqView, lang: str) -> str:
 def _conf(req: ReqView, lang: str) -> str:
     if not req.confirmation_method:
         return ""
-    label = "подтверждение" if lang == "ru" else "confirmation"
+    label = {"ru": "подтверждение", "uz": "tasdiqlash", "en": "confirmation"}[lang]
     return f" ({label}: {req.confirmation_method})"
 
 
@@ -472,6 +563,9 @@ _LETTER_HEAD = {
     "en": ("Request for clarification of the tender documentation",
            "Please clarify the following provisions of the tender documentation:",
            "Quote", "p.", "file"),
+    "uz": ("Tender hujjatiga tushuntirish soʻrovi",
+           "Tender hujjatining quyidagi qoidalarini tushuntirib berishingizni soʻraymiz:",
+           "Iqtibos", "b.", "fayl"),
 }
 
 

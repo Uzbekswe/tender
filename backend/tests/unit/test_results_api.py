@@ -318,6 +318,29 @@ def test_recommendations_follow_the_project_report_language(seeded):
         assert not any(has_cyrillic(r.problem) or has_cyrillic(r.action) for r in recs)
 
 
+def test_recommendations_follow_the_uzbek_report_language(seeded):
+    """A uz project gets Uzbek recommendations (Latin, not the English ones); recomputing on en gives English."""
+    def has_cyrillic(text: str) -> bool:
+        return any("а" <= ch.lower() <= "я" or ch in "ёЁ" for ch in text)
+
+    def texts() -> list[tuple[str, str]]:
+        with session_scope() as s:
+            return sorted((r.problem, r.action) for r in s.exec(select(Recommendation)).all())
+
+    with session_scope() as s:
+        s.get(Project, seeded["project"]).report_lang = "uz"
+    recompute_run(seeded["run"])
+    uz = texts()
+    assert len(uz) == 3
+    assert not any(has_cyrillic(problem) or has_cyrillic(action) for problem, action in uz)
+
+    with session_scope() as s:
+        s.get(Project, seeded["project"]).report_lang = "en"
+    recompute_run(seeded["run"])
+    en = texts()
+    assert len(en) == 3 and en != uz
+
+
 def test_score_stage_is_registered_after_assess_and_writes_progress(seeded):
     from app.runner import STAGES
 
