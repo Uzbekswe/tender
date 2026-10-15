@@ -657,6 +657,23 @@ def test_declaration_accepts_any_claim_document_type() -> None:
     assert checked.result["status"] == Status.meets
 
 
+@pytest.mark.parametrize("page_type", ["application_form", "other", "invoice", "certificate", None])
+@pytest.mark.parametrize("judgement", ["satisfies", "claims_without_proof"])
+def test_declaration_is_met_by_a_verified_bidder_statement_on_any_page_type(page_type, judgement) -> None:
+    # Page card types vary between runs (the same page was "application_form" in one run and
+    # "other" in the next); a declaration's status must not depend on them.
+    req = _req(evidence_doc_types=("guarantee_letter", "form_template"), parameter="Заявление об отсутствии конфликта")
+    checked = _assess(req, _answer(judgement, _ev(GUARANTEE)), _page(page_type, GUARANTEE))
+    assert checked.result["status"] == Status.meets
+    assert "WRONG_DOC_TYPE" not in checked.result["reason_codes"]
+
+
+def test_row_doc_type_does_not_use_the_type_of_a_long_merged_file() -> None:
+    assert bid_stages._row_doc_type("other", "invoice", 120) == "other"
+    assert bid_stages._row_doc_type(None, "invoice", 120) is None
+    assert bid_stages._row_doc_type("other", "certificate", 2) == "certificate"
+
+
 def test_wrong_doc_type_is_only_for_a_proof_document_of_another_proof_type() -> None:
     req = _req(evidence_doc_types=("tax_certificate",), parameter="Справка о налоговой регистрации")
     checked = _assess(req, _answer("satisfies", _ev(CONTRACT)), _page("contract", CONTRACT))
