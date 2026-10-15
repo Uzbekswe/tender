@@ -173,7 +173,12 @@ def _write_llm_metrics(run_id: int) -> None:
         if run is None:
             return
         current = dict(run.progress.get("llm") or {})
-        run.progress = {**run.progress, "llm": {**metrics, "escalations": list(current.get("escalations") or [])}}
+        # Keeps the escalations and the counters that the stages wrote during the run.
+        kept = {name: value for name, value in current.items() if name not in metrics}
+        run.progress = {
+            **run.progress,
+            "llm": {**kept, **metrics, "escalations": list(current.get("escalations") or [])},
+        }
         session.add(run)
 
 

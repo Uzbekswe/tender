@@ -29,7 +29,7 @@ from app.models import (  # noqa: E402
 )
 from app.settings import get_settings  # noqa: E402
 from engine import bid_stages, cards, pipeline, tender_stages  # noqa: E402,F401  (registers the stages)
-from engine.escalation import default_tier, escalation_tiers, record_escalations  # noqa: E402
+from engine.escalation import default_tier, escalation_tiers, record_escalations, record_llm_counts  # noqa: E402
 from llm.client import CallMeta, ProviderUnavailable  # noqa: E402
 from llm.schemas import MatchOut, MatchOuts, PageCardOut, PageCardsOut, RequirementDrafts  # noqa: E402
 from llm.service import CallStats  # noqa: E402
@@ -171,6 +171,21 @@ def test_record_escalations_keeps_one_entry_per_stage_and_unit(data_dir: Path):
     assert set(logged[0]) == {"stage", "unit", "from_tier", "to_tier", "reason"}
 
 
+def test_llm_counters_and_escalations_survive_the_end_of_the_run(data_dir: Path):
+    run_id = _bare_run(data_dir)
+    record_llm_counts(run_id, {"escalation_skipped": 3, "ignored_needs_expert": 1})
+    record_escalations(run_id, [{"stage": "match", "unit": "U-003", "from_tier": "standard", "to_tier": "hard",
+                                 "reason": "rule judgement cannot_judge"}])
+
+    pipeline._write_llm_metrics(run_id)  # the run-end hook: writes the call metrics, keeps the rest
+
+    with Session(db.get_engine()) as session:
+        llm = session.get(Run, run_id).progress["llm"]
+    assert llm["escalation_skipped"] == 3 and llm["ignored_needs_expert"] == 1
+    assert [item["reason"] for item in llm["escalations"]] == ["rule judgement cannot_judge"]
+    assert llm["calls"] == {}
+
+
 # ---------- extract: a window with poor quotes is reasked once; the better answer is kept ----------
 
 
@@ -282,7 +297,7 @@ def test_mandatory_requirement_with_doubt_is_reasked_alone_once_on_the_hard_tier
     assert [(e["stage"], e["unit"], e["from_tier"], e["to_tier"]) for e in entries] == [
         ("match", "U-003", default_tier("match"), default_tier("match_hard")),
     ]
-    assert "did not verify" in entries[0]["reason"]
+    assert entries[0]["reason"] == "rule all claimed quotes failed verification"  # the rule that fired
 
     # The next run reuses the stored hard answer: no call, and the escalation is not logged twice.
     with Session(db.get_engine()) as session:

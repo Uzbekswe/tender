@@ -56,7 +56,7 @@ from app.runner import STAGES, RunContext, _redact, _rmw_lock, add_warning, regi
 from app.storage import get_store
 from engine import pipeline as reading  # registers the reading stages first
 from engine import status as verdict
-from engine.escalation import default_tier, raise_first_error, record_escalations
+from engine.escalation import default_tier, raise_first_error, record_escalations, record_llm_counts
 from engine.retrieval import (
     WIDE_LIMIT,
     Candidates,
@@ -94,6 +94,8 @@ CLAIMS_WITHOUT_PROOF = "claims_without_proof"
 PARTIALLY_SATISFIES = "partially_satisfies"
 CANNOT_JUDGE = "cannot_judge"
 CONTRADICTS = "contradicts"
+# Judgements that are a clear answer after Sonnet: a low confidence on them is not re-asked on the hard tier.
+CLEAR_JUDGEMENTS = frozenset({SATISFIES, PARTIALLY_SATISFIES, CONTRADICTS, CLAIMS_WITHOUT_PROOF})
 _NUMBER_RE = re.compile(r"(\d+)")
 # The MatchResult text of a requirement the e-procurement platform checks (no bid document is read).
 PLATFORM_RATIONALE = {
@@ -121,6 +123,15 @@ def _doc_name(doc: Document) -> str:
 def _most_common(items: list[Any]) -> Any | None:
     counted = Counter(items).most_common(1)
     return counted[0][0] if counted else None
+
+
+def _row_doc_type(card_type: str | None, document_type: str | None) -> str | None:
+    """The type of a page: its card's type, unless the card says "other" or has none. Then the type of
+    its document (the majority of the document's page cards, see pipeline), so one page's wording
+    does not decide whether its document is a proof."""
+    if card_type and card_type != "other":
+        return card_type
+    return document_type or card_type
 
 
 def _limit(text: str) -> str:
@@ -253,7 +264,7 @@ def _load_bid(package_id: int) -> _Bid:
                 read_quality=float(page.read_quality or 0.0),
                 usable=not is_duplicate and not page.unreadable and bool(text.strip()),
                 unread=not is_duplicate and (page.unreadable or page.source == PageSource.none),
-                doc_type=card.doc_type if card else None,
+                doc_type=_row_doc_type(card.doc_type if card else None, docs[page.document_id].doc_type),
                 summary=(card.summary_ru or "") if card else "",
                 keywords=tuple(card.keywords or []) if card else (),
                 entities=list(card.entities or []) if card else [],
@@ -796,6 +807,8 @@ class _Found:
     value_num: float | None = None
     value_unit: str | None = None
     numeric: str | None = None   # "ok" | "fail" when code compared it
+    doc_type: str | None = None
+    is_proof: bool = False       # the document can support Meets (status.is_proof_item)
 
 
 @dataclass
@@ -803,7 +816,7 @@ class _Checked:
     result: dict              # MatchResult column values
     evidence: list[dict]      # Evidence column values (verified items only)
     contradiction: dict | None
-    doubt: list[str] = field(default_factory=list)  # conflict or doubt: a mandatory one is re-asked on the hard tier
+    hard: list[str] = field(default_factory=list)  # the rules that send a mandatory item to the hard tier, if any
 
 
 # Legal-form and organisation markers (ru / uz Latin / uz Cyrillic / en).
@@ -844,6 +857,7 @@ def _verify_item(ev: EvidenceOut, bid: _Bid, req: _Req) -> _Found | None:
     if not result.verified or result.page is None:
         return None
     row = pages[result.page]
+    declaration = verdict.is_declaration(req.evidence_doc_types, req.confirmation_method)
     return _Found(
         ev=ev,
         row=row,
@@ -851,6 +865,8 @@ def _verify_item(ev: EvidenceOut, bid: _Bid, req: _Req) -> _Found | None:
         page_corrected=result.page_corrected,
         from_confirming=not req.evidence_doc_types or row.doc_type in req.evidence_doc_types,
         subject_is_bidder=_subject_is_bidder(ev.subject, ev.subject_stir, bid),
+        doc_type=row.doc_type,
+        is_proof=verdict.is_proof_item(row.doc_type, declaration=declaration),
     )
 
 
@@ -879,9 +895,39 @@ def _value_contradiction(found: list[_Found]) -> tuple[_Found, _Found] | None:
     return None
 
 
+def _hard_rules(*, req: _Req, final: _Final, judgement: str | None, claimed: list[EvidenceOut],
+                found: list[_Found], reasons: set[str], decision: verdict.Decision) -> list[str]:
+    """The rules that send a requirement to the hard tier (task match_hard). Only a mandatory item that
+    the first answer left as needs_review is re-asked, and only for one of these reasons; each reason
+    names its rule, and that text goes into the escalation log. A clear Sonnet answer is never re-asked:
+    satisfies, partially_satisfies, contradicts, claims_without_proof, or not_addressed after the wide
+    search. One failed quote among verified ones does not count either."""
+    if req.req_type != verdict.MANDATORY or decision.status != verdict.NEEDS_REVIEW:
+        return []
+    rules: list[str] = []
+    if judgement == CANNOT_JUDGE:
+        rules.append("rule judgement cannot_judge")
+    if claimed and not found:
+        rules.append("rule all claimed quotes failed verification")
+    if verdict.CONTRADICTION in reasons:
+        rules.append("rule bid documents give different values")
+    clear = judgement in CLEAR_JUDGEMENTS or (judgement == NOT_ADDRESSED and final.stage == "wide")
+    if (decision.confidence < verdict.DEFAULT_REVIEW_THRESHOLD and verdict.PLATFORM_CHECK not in reasons
+            and not clear):
+        rules.append(
+            f"rule confidence {decision.confidence:g} below the review threshold "
+            f"{verdict.DEFAULT_REVIEW_THRESHOLD:g}"
+        )
+    return rules
+
+
+IGNORED_EXPERT_NOTE = "The model asked for an expert, but this is not an equivalence requirement: the flag is ignored."
+
+
 def _assess_one(final: _Final, plan: _Plan) -> _Checked:
     bid, req = plan.bid, final.req
     deadline = bid.deadline.date() if bid.deadline else None
+    declaration = verdict.is_declaration(req.evidence_doc_types, req.confirmation_method)
     reasons: set[str] = set()
 
     ans = final.answer
@@ -900,14 +946,14 @@ def _assess_one(final: _Final, plan: _Plan) -> _Checked:
             discarded += 1
             views.append(verdict.EvidenceView(
                 verified=False, method=None, page_corrected=False, read_quality=0.0,
-                from_confirming_doc=False, subject_is_bidder=True,
+                from_confirming_doc=False, subject_is_bidder=True, is_proof=False,
             ))
             continue
         found.append(item)
         views.append(verdict.EvidenceView(
             verified=True, method=item.method, page_corrected=item.page_corrected,
             read_quality=item.row.read_quality, from_confirming_doc=item.from_confirming,
-            subject_is_bidder=item.subject_is_bidder,
+            subject_is_bidder=item.subject_is_bidder, is_proof=item.is_proof,
         ))
     usable = [f for f in found if f.subject_is_bidder]
 
@@ -949,7 +995,15 @@ def _assess_one(final: _Final, plan: _Plan) -> _Checked:
         reasons.add(verdict.QUOTE_UNVERIFIED)
     if judgement == CLAIMS_WITHOUT_PROOF:
         reasons.add(verdict.CLAIM_ONLY)
-    if req.evidence_doc_types and judgement == SATISFIES and usable and not any(f.from_confirming for f in usable):
+    # Proof versus claim is decided here, not by the model: a documentary requirement that only a
+    # claim document (the bidder's own letter, offer or form) supports is not confirmed.
+    if judgement == SATISFIES and usable and not any(f.is_proof for f in usable):
+        if not declaration and all(f.doc_type in verdict.CLAIM_DOC_TYPES for f in usable):
+            reasons.add(verdict.CLAIM_ONLY)
+    # WRONG_DOC_TYPE is only for a PROOF document of another proof type than the tender names.
+    if (req.evidence_doc_types and judgement == SATISFIES and usable
+            and not any(f.from_confirming for f in usable)
+            and any(f.doc_type in verdict.PROOF_DOC_TYPES for f in usable)):
         reasons.add(verdict.WRONG_DOC_TYPE)
     if judgement == PARTIALLY_SATISFIES:
         reasons.add(verdict.PARTIAL_COVERAGE)
@@ -962,7 +1016,8 @@ def _assess_one(final: _Final, plan: _Plan) -> _Checked:
     if judgement == NOT_ADDRESSED and final.stage == "wide" and not found:
         reasons.add(verdict.UNREADABLE_IN_SCOPE if bid.unread else verdict.ABSENT)
 
-    if ans is not None and (ans.needs_expert or (req.is_equivalent_allowed and judgement == CANNOT_JUDGE)):
+    # An expert is asked only for an equivalent product or document; the flag is ignored otherwise.
+    if req.is_equivalent_allowed and (needs_expert or judgement == CANNOT_JUDGE):
         reasons.add(verdict.EQUIVALENT_NEEDS_EXPERT)
 
     contradiction = None
@@ -982,7 +1037,7 @@ def _assess_one(final: _Final, plan: _Plan) -> _Checked:
 
     decision = verdict.decide(
         judgement=judgement,
-        needs_expert=needs_expert,
+        needs_expert=needs_expert and req.is_equivalent_allowed,
         reasons=reasons,
         evidence=views,
         req_type=req.req_type,
@@ -993,6 +1048,8 @@ def _assess_one(final: _Final, plan: _Plan) -> _Checked:
     if ans is not None and ans.rationale.strip():
         rationale_parts.append(ans.rationale.strip())
     rationale_parts.extend(decision.notes)
+    if needs_expert and not req.is_equivalent_allowed:
+        rationale_parts.append(IGNORED_EXPERT_NOTE)
     result = {
         "requirement_id": req.id,
         "status": Status(decision.status),
@@ -1021,18 +1078,11 @@ def _assess_one(final: _Final, plan: _Plan) -> _Checked:
         }
         for f in found
     ]
-    doubt: list[str] = []
-    if ans is not None and judgement in (CONTRADICTS, CANNOT_JUDGE):
-        doubt.append(f"judgement {judgement}")
-    if ans is not None and needs_expert:
-        doubt.append("needs an expert")
-    if discarded:
-        doubt.append(f"{discarded} claimed quote(s) did not verify")
-    if verdict.CONTRADICTION in reasons:
-        doubt.append("bid documents give different values")
-    if decision.confidence < verdict.DEFAULT_REVIEW_THRESHOLD:
-        doubt.append(f"confidence {decision.confidence:g} below the review threshold")
-    return _Checked(result=result, evidence=evidence, contradiction=contradiction, doubt=doubt)
+    hard = _hard_rules(
+        req=req, final=final, judgement=judgement, claimed=claimed, found=found,
+        reasons=reasons, decision=decision,
+    )
+    return _Checked(result=result, evidence=evidence, contradiction=contradiction, hard=hard)
 
 
 @dataclass
@@ -1098,14 +1148,30 @@ def _store_checked(run_id: int, checked: list[_Checked], total: int) -> _AssessO
 
 
 def _hard_candidates(plan: _Plan, checked: list[_Checked]) -> dict[int, str]:
-    """Mandatory requirements with conflict or doubt, by requirement id, with the reasons.
-    Non-mandatory items are never re-asked."""
+    """Mandatory requirements that a rule sends to the hard tier, by requirement id, with the rules
+    that fired. Non-mandatory items are never re-asked."""
     mandatory = {r.id for r in plan.reqs if r.req_type == verdict.MANDATORY}
     return {
-        c.result["requirement_id"]: "; ".join(c.doubt)
+        c.result["requirement_id"]: "; ".join(c.hard)
         for c in checked
-        if c.doubt and c.result["requirement_id"] in mandatory
+        if c.hard and c.result["requirement_id"] in mandatory
     }
+
+
+def _llm_counts(plan: _Plan, walk: _Walk, checked: list[_Checked]) -> dict[str, int]:
+    """Counters of decisions taken in code, for Run.progress["llm"], from the first answers:
+    escalation_skipped: mandatory items with a clear Sonnet answer, so not re-asked on the hard tier;
+    ignored_needs_expert: expert flags on requirements that are not equivalence cases."""
+    mandatory = {r.id for r in plan.reqs if r.req_type == verdict.MANDATORY}
+    skipped = sum(
+        1 for c in checked
+        if c.result["requirement_id"] in mandatory and _val(c.result["status"]) != verdict.NEEDS_REVIEW
+    )
+    ignored = sum(
+        1 for final in walk.finals.values()
+        if final.answer is not None and final.answer.needs_expert and not final.req.is_equivalent_allowed
+    )
+    return {"escalation_skipped": skipped, "ignored_needs_expert": ignored}
 
 
 def _escalation_entry(req: _Req, reason: str) -> dict:
@@ -1192,13 +1258,14 @@ async def _run_hard(run_id: int, llm: Any, req: _Req, unit: _Unit, reason: str) 
 
 
 async def stage_assess(run_id: int, ctx: RunContext) -> None:
-    """Stages 10-12. Decides every requirement; then the mandatory ones with conflict or doubt are
+    """Stages 10-12. Decides every requirement; then the mandatory ones that a hard-tier rule flags are
     re-asked once on the hard tier and decided again with the hard answer (see _hard_finals)."""
     if not _has_checklist(ctx):
         return
     plan = await asyncio.to_thread(_prepare, ctx)
     walk = await asyncio.to_thread(_walk, plan)
     checked = await asyncio.to_thread(_decide_all, plan, walk.finals)
+    counts = _llm_counts(plan, walk, checked)
     doubts = _hard_candidates(plan, checked)
     if doubts:
         hard = await _hard_finals(run_id, plan, walk, doubts)
@@ -1206,6 +1273,7 @@ async def stage_assess(run_id: int, ctx: RunContext) -> None:
             checked = await asyncio.to_thread(_decide_all, plan, {**walk.finals, **hard})
     total = len(plan.reqs) + len(plan.platform_reqs)
     outcome = await asyncio.to_thread(_store_checked, run_id, checked, total)
+    await asyncio.to_thread(record_llm_counts, run_id, counts)
     pending = outcome.total - outcome.done
     _set_progress(run_id, "assess", outcome.done, outcome.total, pending)
 

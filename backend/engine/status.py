@@ -10,7 +10,28 @@ mandatory-Meets guard.
 
 from __future__ import annotations
 
+import re
+from collections.abc import Iterable
 from dataclasses import dataclass
+
+# Document types (engine.cards.DOC_TYPES) that prove a fact: an official record, a contract, a
+# third party's statement. A requirement that asks for a documentary proof is met only by these.
+PROOF_DOC_TYPES = frozenset({
+    "certificate", "license", "registration_certificate", "tax_certificate", "contract", "act",
+    "invoice", "reference_letter", "financial_statement", "staff_list", "labour_registry_extract",
+    "passport_datasheet", "catalogue", "power_of_attorney",
+})
+# Document types that are the bidder's own statement or offer: they prove only what the bidder says.
+CLAIM_DOC_TYPES = frozenset({
+    "cover_letter", "guarantee_letter", "application_form", "technical_proposal", "price_offer",
+    "form_template", "other",
+})
+# A requirement that asks the bidder for its own statement names a form, letter or declaration.
+_DECLARATION_WORDS = re.compile(
+    r"(?<!\w)(гарантийн\w*|письм\w*|форм(?:а|ы|е|у|ой|ам|ах|ами|ою)|анкет\w*|заявлени\w*|декларац\w*"
+    r"|kafolat\w*|xat(?:lar)?|shakl\w*|ariza\w*|letters?|forms?|declarations?|statements?)(?!\w)",
+    re.IGNORECASE,
+)
 
 # Reason codes (set by stages 8-11).
 ABSENT = "ABSENT"
@@ -54,6 +75,24 @@ METHOD_FACTOR_UNSURE = 0.5       # LLM said cannot_judge, or needs_expert
 NO_VERIFIED_CAP = 50.0
 
 
+def is_declaration(evidence_doc_types: Iterable[str] | None, confirmation_method: str | None) -> bool:
+    """True when the tender asks for the bidder's own statement, not a document that proves a fact.
+
+    That is the case when every evidence doc type is a CLAIM type, or when the confirmation method
+    names a form, letter or declaration. Any other requirement is documentary.
+    """
+    types = [t for t in (evidence_doc_types or ()) if t]
+    if types and all(t in CLAIM_DOC_TYPES for t in types):
+        return True
+    return bool(confirmation_method) and _DECLARATION_WORDS.search(confirmation_method) is not None
+
+
+def is_proof_item(doc_type: str | None, *, declaration: bool) -> bool:
+    """True when a document of this type can support Meets: a PROOF type, or, for a declaration, the
+    bidder's own statement (a CLAIM type), which is exactly what the tender asks for."""
+    return doc_type in PROOF_DOC_TYPES or (declaration and doc_type in CLAIM_DOC_TYPES)
+
+
 @dataclass(frozen=True)
 class EvidenceView:
     verified: bool
@@ -62,6 +101,7 @@ class EvidenceView:
     read_quality: float         # 0..1 of the page
     from_confirming_doc: bool   # doc type is one of the requirement's evidence_doc_types (or none specified)
     subject_is_bidder: bool | None
+    is_proof: bool              # see is_proof_item: the document can support Meets
 
 
 @dataclass(frozen=True)
@@ -188,9 +228,10 @@ def _table_row(*, judgement: str | None, needs_expert: bool, reasons: set[str],
     if CONTRADICTION in reasons:
         return NEEDS_REVIEW, [CONTRADICTION]
 
-    # 7. Meets: judgement satisfies (or VALUE_OK) and verified, confirming, bidder evidence.
+    # 7. Meets: judgement satisfies (or VALUE_OK) and verified, confirming, bidder PROOF evidence.
+    # A bidder's own statement (CLAIM type) counts only where the tender asks for a declaration.
     satisfied = judgement == "satisfies" or VALUE_OK in reasons
-    if satisfied and any(e.from_confirming_doc for e in usable):
+    if satisfied and any(e.from_confirming_doc and e.is_proof for e in usable):
         return MEETS, [VALUE_OK] if VALUE_OK in reasons else ["satisfies"]
 
     # 8. Anything else.
@@ -199,9 +240,9 @@ def _table_row(*, judgement: str | None, needs_expert: bool, reasons: set[str],
 
 def _strong_evidence(evidence: list[EvidenceView]) -> bool:
     """A verified exact quote, or a fuzzy match on a well-read page, among the items that
-    can support Meets (usable and from a confirming document)."""
+    can support Meets (usable, proof, and from a confirming document)."""
     return any(
-        _is_usable(e) and e.from_confirming_doc and (
+        _is_usable(e) and e.from_confirming_doc and e.is_proof and (
             e.method == "exact"
             or (e.method == "fuzzy_ocr" and e.read_quality >= STRONG_FUZZY_READ_QUALITY)
         )

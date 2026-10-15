@@ -151,7 +151,9 @@ class ConsolidationItem(BaseModel):
     code: str
     decision: Literal["keep", "exclude", "merge_into"]
     target: str | None = Field(None, description="Code to merge into (merge_into only)")
-    reason_code: Literal["TENDER_FACT", "CUSTOMER_DUTY", "PROCEDURE", "POST_AWARD", "LEGAL_BACKGROUND", "DUPLICATE"] | None = None
+    reason_code: Literal[
+        "TENDER_FACT", "CUSTOMER_DUTY", "PROCEDURE", "POST_AWARD", "LEGAL_BACKGROUND", "DUPLICATE", "CONTRADICTION",
+    ] | None = None
     why: str = Field("", description="One short sentence in the report language")
     type_fix: Literal["mandatory", "scored", "desirable"] | None = None
     platform_check: bool = Field(False, description="True when the e-procurement platform itself confirms this (digital signature, account balance/deposit, price entered on the platform, platform registration), so the bid files cannot prove it")
