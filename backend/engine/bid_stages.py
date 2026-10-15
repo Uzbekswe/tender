@@ -863,7 +863,10 @@ def _verify_item(ev: EvidenceOut, bid: _Bid, req: _Req) -> _Found | None:
         row=row,
         method=result.method or "exact",
         page_corrected=result.page_corrected,
-        from_confirming=not req.evidence_doc_types or row.doc_type in req.evidence_doc_types,
+        # A declaration is the bidder's own statement: any claim document (letter, form, offer) is
+        # what the tender asks for, whichever claim type the tender happened to name.
+        from_confirming=(not req.evidence_doc_types or row.doc_type in req.evidence_doc_types
+                         or (declaration and row.doc_type in verdict.CLAIM_DOC_TYPES)),
         subject_is_bidder=_subject_is_bidder(ev.subject, ev.subject_stir, bid),
         doc_type=row.doc_type,
         is_proof=verdict.is_proof_item(row.doc_type, declaration=declaration),
@@ -921,6 +924,8 @@ def _hard_rules(*, req: _Req, final: _Final, judgement: str | None, claimed: lis
     return rules
 
 
+CLAIM_LABEL_NOTE = ("The model called this a claim without proof, but the quoted page is a proof document "
+                    "of an accepted type: the code treats the content as satisfied.")
 IGNORED_EXPERT_NOTE = "The model asked for an expert, but this is not an equivalence requirement: the flag is ignored."
 
 
@@ -936,6 +941,8 @@ def _assess_one(final: _Final, plan: _Plan) -> _Checked:
         judgement, needs_expert, claimed = None, False, []
     else:
         judgement, needs_expert, claimed = ans.judgement, ans.needs_expert, list(ans.evidence)
+    model_judgement = judgement
+    claim_label_overridden = False
 
     found: list[_Found] = []
     views: list[verdict.EvidenceView] = []
@@ -993,6 +1000,12 @@ def _assess_one(final: _Final, plan: _Plan) -> _Checked:
         reasons.add(verdict.ATTRIBUTION)
     if claimed and not found:
         reasons.add(verdict.QUOTE_UNVERIFIED)
+    # The model's proof-versus-claim label is not trusted: on the same page it flips between runs.
+    # When the quoted evidence is a proof document of a type the tender accepts, the content counts
+    # as satisfied and the status table decides; otherwise the label stands as CLAIM_ONLY.
+    if judgement == CLAIMS_WITHOUT_PROOF and any(f.is_proof and f.from_confirming for f in usable):
+        judgement = SATISFIES
+        claim_label_overridden = True
     if judgement == CLAIMS_WITHOUT_PROOF:
         reasons.add(verdict.CLAIM_ONLY)
     # Proof versus claim is decided here, not by the model: a documentary requirement that only a
@@ -1050,11 +1063,13 @@ def _assess_one(final: _Final, plan: _Plan) -> _Checked:
     rationale_parts.extend(decision.notes)
     if needs_expert and not req.is_equivalent_allowed:
         rationale_parts.append(IGNORED_EXPERT_NOTE)
+    if claim_label_overridden:
+        rationale_parts.append(CLAIM_LABEL_NOTE)
     result = {
         "requirement_id": req.id,
         "status": Status(decision.status),
         "reason_codes": list(decision.reasons),
-        "llm_judgement": judgement,
+        "llm_judgement": model_judgement,
         "rationale": " ".join(rationale_parts),
         "confidence": decision.confidence,
         "confidence_parts": {**decision.confidence_parts, "discarded_unverified": discarded},
