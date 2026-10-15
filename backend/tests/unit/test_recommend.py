@@ -1,6 +1,8 @@
-"""Recommendations: reason codes to action types, RU and EN wording, the no-new-facts guard (§4.2 stage 14, §6.7)."""
+"""Recommendations: reason codes to action types, RU, UZ and EN wording, the no-new-facts guard (§4.2 stage 14, §6.7)."""
 
 from __future__ import annotations
+
+import re
 
 import pytest
 
@@ -124,7 +126,7 @@ def test_confirmation_method_appears_in_the_action():
 def test_every_rendered_text_passes_the_guard():
     req = _req(value="24", unit="months", code="U-007", parameter="Experience", operator=">=")
     evidence = _evidence(quote="Contract No. 12 for 36 months", value_raw="36 months", page=2)
-    for lang in ("ru", "en"):
+    for lang in ("ru", "uz", "en"):
         for status, reasons in [
             ("does_not_meet", ["ABSENT"]), ("does_not_meet", ["VALUE_FAIL"]), ("partial", ["PARTIAL_COVERAGE"]),
             ("needs_review", ["NO_DEADLINE"]),
@@ -208,3 +210,61 @@ def test_clarification_request_with_no_questions_is_still_a_letter():
     body = clarification_request([], "en")
     assert body.startswith("Request for clarification")
     assert "1." not in body
+
+
+# ---------- Uzbek wording (report language "uz") ----------
+
+CYRILLIC = re.compile(r"[А-Яа-яЁё]")
+
+
+def test_uzbek_wording_names_the_requirement_and_keeps_the_rules() -> None:
+    rec = recommend(_req(), "does_not_meet", ["ABSENT"], [], "uz")
+    assert rec.problem == "Taklifda T-014: Rated power (kamida 2.5 kW) talabini tasdiqlovchi hujjat topilmadi."
+    assert rec.action == "Talabni tasdiqlovchi hujjatni taklifga qoʻshing (tasdiqlash: Datasheet, page with the rated power)."
+    assert rec.action_type == ADD_DOCUMENT
+    assert rec.criticality == "high"  # a mandatory requirement, as in the other languages
+
+
+def test_uzbek_range_condition() -> None:
+    rec = recommend(_req(operator="range", value="2", value_max="5"), "partial", ["PARTIAL_COVERAGE"], [], "uz")
+    assert "T-014: Rated power (2 dan 5 kW gacha)" in rec.problem
+
+
+def test_uzbek_report_is_uzbek_for_every_status_and_reason() -> None:
+    req = _req(parameter_ru=None)  # no Russian name stored: nothing Cyrillic may come through
+    cases = [
+        ("does_not_meet", ["ABSENT"]), ("does_not_meet", ["VALUE_FAIL"]), ("does_not_meet", ["CONTRADICTION"]),
+        ("does_not_meet", ["WRONG_DOC_TYPE"]), ("does_not_meet", ["EXPIRED"]), ("does_not_meet", ["ATTRIBUTION"]),
+        ("partial", ["PARTIAL_COVERAGE"]), ("not_confirmed", ["CLAIM_ONLY"]),
+        ("needs_review", ["EQUIVALENT_NEEDS_EXPERT"]), ("needs_review", ["CONTRADICTION"]),
+        ("needs_review", ["UNREADABLE_IN_SCOPE"]), ("needs_review", ["NO_DEADLINE"]),
+        ("needs_review", ["QUOTE_UNVERIFIED"]), ("needs_review", ["LLM_ERROR"]), ("needs_review", []),
+    ]
+    for status, reasons in cases:
+        uz = recommend(req, status, reasons, _evidence(), "uz")
+        assert not CYRILLIC.search(uz.problem + uz.action), (status, reasons)
+        assert uz.problem != recommend(req, status, reasons, _evidence(), "en").problem
+        assert uz.problem != recommend(req, status, reasons, _evidence(), "ru").problem
+
+
+def test_unknown_report_language_still_falls_back_to_russian() -> None:
+    req = _req()
+    assert recommend(req, "does_not_meet", ["ABSENT"], [], "de") == recommend(req, "does_not_meet", ["ABSENT"], [], "ru")
+
+
+def test_clarification_letter_in_uzbek() -> None:
+    questions = [
+        QuestionView(
+            kind="scheme_mismatch",
+            text="The criteria maxima add up to 14, but the stated maximum is 15.",
+            sources=[{"quote": "Maximum score 15", "file": "tender.pdf", "page": 28}],
+        ),
+        QuestionView(kind="contradiction", text="Warranty is stated as 24 and as 12 months.", sources=[]),
+    ]
+    body = clarification_request(questions, "uz")
+    assert body.startswith("Tender hujjatiga tushuntirish soʻrovi")
+    assert "Tender hujjatining quyidagi qoidalarini tushuntirib berishingizni soʻraymiz:" in body
+    assert "1. The criteria maxima add up to 14" in body
+    assert "   Iqtibos (fayl tender.pdf, b. 28): «Maximum score 15»" in body
+    assert "Request for clarification" not in body and "Запрос" not in body
+    assert body.endswith("\n")

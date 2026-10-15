@@ -216,3 +216,13 @@ def test_page_image_404_then_served(client: TestClient, data_dir: Path) -> None:
     assert resp.status_code == 200
     assert resp.headers["content-type"] == "image/png"
     assert resp.content == png
+
+
+def test_project_report_language_uz_through_the_api(client: TestClient) -> None:
+    created = client.post(f"{API}/projects", json={"name": "Lot uz", "report_lang": "uz"})
+    assert created.status_code == 201 and created.json()["report_lang"] == "uz"
+    project_id = created.json()["id"]
+    patched = client.patch(f"{API}/projects/{project_id}", json={"report_lang": "en"})
+    assert patched.status_code == 200 and patched.json()["report_lang"] == "en"
+    assert client.patch(f"{API}/projects/{project_id}", json={"report_lang": "uz"}).json()["report_lang"] == "uz"
+    assert client.post(f"{API}/projects", json={"name": "Lot de", "report_lang": "de"}).status_code == 422

@@ -23,7 +23,7 @@ class ProjectCreate(BaseModel):
     lot_number: str | None = None
     subject: str | None = None
     submission_deadline: datetime | None = None
-    report_lang: str = Field(default="ru", pattern="^(ru|en)$")
+    report_lang: str = Field(default="ru", pattern="^(ru|uz|en)$")
     mode: Literal["supplier", "customer"] = "supplier"
 
 
@@ -34,7 +34,7 @@ class ProjectUpdate(BaseModel):
     lot_number: str | None = None
     subject: str | None = None
     submission_deadline: datetime | None = None
-    report_lang: str | None = Field(default=None, pattern="^(ru|en)$")
+    report_lang: str | None = Field(default=None, pattern="^(ru|uz|en)$")
     settings: dict[str, Any] | None = None
 
 

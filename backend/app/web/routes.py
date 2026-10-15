@@ -1010,7 +1010,8 @@ def _humanize(code: str) -> str:
 
 def display_name(parameter: str | None, parameter_ru: str | None, lang: str) -> str:
     """The name of a requirement on the screen. The Russian name on the Russian UI when there is one;
-    otherwise the name as extracted (the Russian one when that is empty)."""
+    otherwise the name as extracted (the Russian one when that is empty). The extracted name is in the
+    tender's own language, so the Uzbek UI shows it like the English one."""
     original = (parameter or "").strip()
     russian = (parameter_ru or "").strip()
     if lang == "ru" and russian:
