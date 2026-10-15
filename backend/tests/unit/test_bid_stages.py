@@ -635,6 +635,28 @@ def test_declaration_requirement_with_a_guarantee_letter_meets() -> None:
     assert checked.result["status"] == Status.meets
 
 
+def test_claims_without_proof_on_a_proof_document_is_decided_by_the_code() -> None:
+    # The model's proof/claim label flips between runs on the same page; the document type decides.
+    checked = _assess(_req(), _answer("claims_without_proof", _ev(CERT)), _page("certificate", CERT))
+    assert checked.result["status"] == Status.meets
+    assert "CLAIM_ONLY" not in checked.result["reason_codes"]
+    assert checked.result["llm_judgement"] == "claims_without_proof"  # the model's answer is kept
+    assert bid_stages.CLAIM_LABEL_NOTE in checked.result["rationale"]
+
+
+def test_claims_without_proof_on_a_claim_document_stays_claim_only() -> None:
+    checked = _assess(_req(), _answer("claims_without_proof", _ev(GUARANTEE)), _page("guarantee_letter", GUARANTEE))
+    assert checked.result["status"] == Status.not_confirmed
+    assert "CLAIM_ONLY" in checked.result["reason_codes"]
+
+
+def test_declaration_accepts_any_claim_document_type() -> None:
+    # The tender names a guarantee letter; the bidder's statement sits in the technical proposal.
+    req = _req(evidence_doc_types=("guarantee_letter",), parameter="Гарантийное письмо об отсутствии конфликта")
+    checked = _assess(req, _answer("satisfies", _ev(GUARANTEE)), _page("technical_proposal", GUARANTEE))
+    assert checked.result["status"] == Status.meets
+
+
 def test_wrong_doc_type_is_only_for_a_proof_document_of_another_proof_type() -> None:
     req = _req(evidence_doc_types=("tax_certificate",), parameter="Справка о налоговой регистрации")
     checked = _assess(req, _answer("satisfies", _ev(CONTRACT)), _page("contract", CONTRACT))
