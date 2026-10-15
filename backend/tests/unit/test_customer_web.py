@@ -300,13 +300,14 @@ def test_every_literal_translation_key_exists_in_both_languages() -> None:
 
     ru = json.loads((ROOT / "i18n" / "ru.json").read_text(encoding="utf-8"))
     en = json.loads((ROOT / "i18n" / "en.json").read_text(encoding="utf-8"))
+    uz = json.loads((ROOT / "i18n" / "uz.json").read_text(encoding="utf-8"))
     pattern = re.compile(r"""(?<![\w.])(?:t|tr)\(\s*['"]([a-z][a-zA-Z0-9_.]*[a-zA-Z0-9_])['"]""")
     sources = list(TEMPLATES.glob("*.html")) + [
         ROOT / "app" / "web" / "routes.py", ROOT / "app" / "api" / "customer.py",
         ROOT / "engine" / "committee.py", ROOT / "engine" / "comparison.py",
     ]
     used = {m.group(1) for path in sources for m in pattern.finditer(path.read_text(encoding="utf-8"))}
-    missing = sorted(key for key in used if key not in ru or key not in en)
+    missing = sorted(key for key in used if key not in ru or key not in en or key not in uz)
     assert missing == [], missing
 
 

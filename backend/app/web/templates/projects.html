@@ -59,11 +59,12 @@
       <input type="text" name="customer" value="{{ values.customer or '' }}">
     </label>
     <label>{{ t('projects.new.deadline') }}
-      <input type="datetime-local" name="submission_deadline" value="{{ values.submission_deadline or '' }}">
+      <input type="date" name="submission_deadline" value="{{ values.submission_deadline or '' }}">
     </label>
     <label>{{ t('projects.new.report_lang') }}
       <select name="report_lang">
         <option value="ru" {% if values.report_lang == 'ru' %}selected{% endif %}>Русский</option>
+        <option value="uz" {% if values.report_lang == 'uz' %}selected{% endif %}>Oʻzbekcha</option>
         <option value="en" {% if values.report_lang == 'en' %}selected{% endif %}>English</option>
       </select>
     </label>

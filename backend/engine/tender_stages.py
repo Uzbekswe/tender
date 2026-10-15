@@ -1118,14 +1118,17 @@ RULE_WHY = {
     "pass_mark": {
         "ru": "Проходной балл проверяется как баллы тендера, а не как условие к заявке.",
         "en": "The pass mark is checked as a tender score, not as a condition of the bid.",
+        "uz": "Oʻtish bali tender bali sifatida tekshiriladi, taklif sharti sifatida emas.",
     },
     "contradiction": {
         "ru": "Противоречит {other}; идёт в письмо на разъяснение.",
         "en": "Contradicts {other}; goes to the clarification letter.",
+        "uz": "{other} bilan ziddiyat; tushuntirish soʻrovi xatiga kiradi.",
     },
     "services_form": {
         "ru": "Форма для товара в тендере на услуги.",
         "en": "A goods-only form in a services tender.",
+        "uz": "Xizmatlar tenderidagi faqat tovarga oid shakl.",
     },
 }
 
@@ -1325,7 +1328,7 @@ def _apply_rules(
     report_lang: str, has_pass_threshold: bool, contradictions: Sequence[Sequence[str]],
 ) -> None:
     """The deterministic consolidation rules (see _validated_suggestions). Changes `result` in place."""
-    lang = "en" if report_lang == "en" else "ru"
+    lang = report_lang if report_lang in ("ru", "uz", "en") else "ru"
     services = _is_services_tender(list(by_code.values()))
     for code, suggestion in result.items():
         if suggestion["decision"] != "keep":
