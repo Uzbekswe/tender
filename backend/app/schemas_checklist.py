@@ -222,3 +222,14 @@ class ChecklistRead(BaseModel):
     rejected_by_verifier: list[Any]
     counts: Counts
     suggestion_counts: SuggestionCounts
+
+
+# ---------- import ----------
+
+class ChecklistImportRead(BaseModel):
+    """The imported version. `already_imported` is true when an approved version of the project
+    already held the same checklist content; then nothing was written."""
+    version: ChecklistVersionRead
+    already_imported: bool
+    excluded_on_import: int
+    warnings: list[str]
