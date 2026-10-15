@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}{{ t('comparison.title') }} · {{ project_name }}{% endblock %}
+{% block content %}
+<p><a href="/projects/{{ project_id }}">{{ t('compare.back') }}</a></p>
+<h1>{{ t('comparison.title') }}: {{ project_name }}</h1>
+
+{% if not_ready %}
+  <div class="alert alert-warn" role="status">{{ t('comparison.not_ready') }}</div>
+{% else %}
+  {# The compact ranking strip, then the matrix. Both are advisory: the committee decides. #}
+  <section class="card strip-card" aria-label="{{ t('committee.ranking.preliminary') }}">
+    {# One label: "Preliminary ranking. Advisory: the evaluation committee decides." #}
+    <p class="alert alert-warn matrix-advisory" role="note"><strong>{{ t('committee.ranking.preliminary') }}</strong></p>
+    {% if matrix.bidders %}
+    <div class="table-wrap">
+      <table class="data strip">
+        <thead>
+          <tr>
+            <th>{{ t('ranking.col.rank') }}</th>
+            <th>{{ t('ranking.col.bidder') }}</th>
+            <th>{{ t('ranking.col.verdict') }}</th>
+            <th>{{ t('ranking.col.compliance') }}</th>
+            <th>{{ t('ranking.col.mandatory') }}</th>
+            <th>{{ t('ranking.col.counts') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for b in matrix.bidders %}
+          <tr>
+            <td data-label="{{ t('ranking.col.rank') }}" class="code">{{ b.rank_text }}</td>
+            <td data-label="{{ t('ranking.col.bidder') }}">
+              <strong>{% if b.summary_href %}<a href="{{ b.summary_href }}">{{ b.name }}</a>{% else %}{{ b.name }}{% endif %}</strong>
+              {% if b.stir %}<div class="muted small code">{{ t('customer.bidders.stir_label') }} {{ b.stir }}</div>{% endif %}
+              {% if b.order_not_certain %}<div class="warn-line">{{ t('committee.order_not_certain') }}</div>{% endif %}
+            </td>
+            <td data-label="{{ t('ranking.col.verdict') }}">
+              {% if b.verdict_text %}
+                <span class="badge badge-verdict-{{ b.verdict }}">{{ b.verdict_text }}</span>
+              {% else %}
+                <span class="muted">{{ t('ranking.no_run') }}</span>
+              {% endif %}
+            </td>
+            <td data-label="{{ t('ranking.col.compliance') }}">{{ b.compliance or t('common.none') }}</td>
+            <td data-label="{{ t('ranking.col.mandatory') }}">{{ b.mandatory or t('common.none') }}</td>
+            <td data-label="{{ t('ranking.col.counts') }}">
+              {% if b.counts %}
+                {% for k in b.counts %}<span class="chip status-{{ k.status }}" title="{{ k.label }}">{{ k.count }}</span> {% endfor %}
+              {% else %}{{ t('common.none') }}{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+      <p class="muted">{{ t('committee.warning.no_bidders') }}</p>
+    {% endif %}
+  </section>
+
+  <div id="matrix">
+    {% include "_comparison_body.html" %}
+  </div>
+{% endif %}
+{% endblock %}

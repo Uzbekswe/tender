@@ -198,6 +198,14 @@ def _bidder_out(pkg: Package, rows: RunRows | None, rank: scoring.BidderRank | N
     return out
 
 
+def item_reasons(rows: RunRows, t: Translate) -> dict[int, str]:
+    """The full committee sentence for every requirement of one finished run, keyed by requirement id.
+
+    The matrix shows the short reason in the cell and this full sentence in its title attribute.
+    """
+    return {item.req.id: _committee_text(item, t) for item in rows.items}
+
+
 def _config_key(run: Run) -> str:
     return json.dumps(
         {"models": run.model_config_used or {}, "prompts": run.prompt_versions or {}},

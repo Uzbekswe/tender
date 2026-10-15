@@ -1,0 +1,42 @@
+{# Upload with a progress bar for every drop zone on the page (form[data-zone]). #}
+<script>
+(function () {
+  document.querySelectorAll('form[data-zone]').forEach(function (form) {
+    var input = form.querySelector('input[type=file]');
+    var bar = form.querySelector('.progress');
+    var fill = bar.querySelector('.bar');
+    var msg = form.querySelector('.zone-msg');
+
+    function send(files) {
+      if (!files || !files.length) return;
+      var data = new FormData();
+      for (var i = 0; i < files.length; i++) data.append('files', files[i]);
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', form.action);
+      bar.hidden = false;
+      fill.style.width = '0%';
+      msg.textContent = form.dataset.uploading;
+      xhr.upload.onprogress = function (e) {
+        if (e.lengthComputable) fill.style.width = Math.round(100 * e.loaded / e.total) + '%';
+      };
+      xhr.onload = function () {
+        if (xhr.status < 400) { window.location.reload(); }
+        else { msg.textContent = form.dataset.failed; }
+      };
+      xhr.onerror = function () { msg.textContent = form.dataset.failed; };
+      xhr.send(data);
+    }
+
+    form.addEventListener('submit', function (e) {
+      if (input.files && input.files.length) { e.preventDefault(); send(input.files); }
+    });
+    form.addEventListener('dragover', function (e) { e.preventDefault(); form.classList.add('over'); });
+    form.addEventListener('dragleave', function () { form.classList.remove('over'); });
+    form.addEventListener('drop', function (e) {
+      e.preventDefault();
+      form.classList.remove('over');
+      if (e.dataTransfer && e.dataTransfer.files.length) send(e.dataTransfer.files);
+    });
+  });
+})();
+</script>
