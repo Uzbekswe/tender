@@ -169,6 +169,7 @@
   "checklist.suggest.reason.POST_AWARD": "duty after award",
   "checklist.suggest.reason.LEGAL_BACKGROUND": "legal background, not a condition",
   "checklist.suggest.reason.DUPLICATE": "duplicate",
+  "checklist.suggest.reason.CONTRADICTION": "contradicts another requirement",
   "checklist.suggest.reason.NONE": "no reason",
   "checklist.suggest.apply": "Apply",
   "checklist.suggest.apply_all": "Apply all suggestions ({n})",
