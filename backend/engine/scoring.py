@@ -25,7 +25,7 @@ Conventions
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -406,3 +406,94 @@ def impact(
     base = _raw_overall(items, scheme, settings, overrides)
     after = _raw_overall(items, scheme, settings, {**(overrides or {}), requirement_id: MEETS})
     return round(after - base, 1) + 0.0  # + 0.0 turns -0.0 into 0.0
+
+
+# ---------- customer side: ranking of bidders (docs/customer-side-decisions.md §4.3) ----------
+
+@dataclass(frozen=True)
+class BidderScore:
+    """One bidder's score results, as the ranking needs them (ScoreSnapshot fields)."""
+    key: int                          # bid package id
+    verdict: str                      # ready | needs_revision | rejection_risk
+    compliance_min: float             # S_min: range lower bound, in %
+    compliance_max: float             # S_max: range upper bound, in %
+    points_min: float | None = None   # tender points lower bound; None when there is no scoring table
+    points_max: float | None = None
+
+
+@dataclass(frozen=True)
+class BidderRank:
+    key: int
+    verdict: str
+    rank: int | None          # None for subject to rejection: not compared, listed last
+    order_not_certain: bool
+
+
+_RANK_GROUP = {READY: 0, NEEDS_REVISION: 1, REJECTION_RISK: 2}
+
+
+def _r(x: float) -> float:
+    """Compare percentages and points at 1e-6, so float noise never splits a tie."""
+    return round(float(x), 6)
+
+
+def rank_bidders(bidders: Sequence[BidderScore]) -> list[BidderRank]:
+    """Preliminary ranking of bidders (§4.3). Pure: the same inputs always give the same order.
+
+    1. Verdict group: Meets all mandatory (ready), then Open points (needs_revision). Subject to
+       rejection (rejection_risk) is not ranked: rank None, listed after the ranked bidders.
+    2. Inside a group, tender points lower bound, higher first. Skipped unless every ranked bidder
+       has points (no scoring table means no points step).
+    3. Then the compliance lower bound S_min, higher first.
+    4. Equal on the steps that apply: same rank, competition style (1, 1, 3). No other tie-breaker.
+
+    order_not_certain: for each pair of neighbours in the ranking, the deciding step is the first
+    of steps 2 and 3 where they differ. If their ranges on that step overlap (the lower neighbour's
+    upper bound reaches the higher one's lower bound), both are flagged. Different groups and ties
+    are never flagged.
+    """
+    for b in bidders:
+        if b.verdict not in _RANK_GROUP:
+            raise ValueError(f"unknown verdict {b.verdict!r} for bidder {b.key}")
+
+    eligible = [b for b in bidders if b.verdict != REJECTION_RISK]
+    rejected = [b for b in bidders if b.verdict == REJECTION_RISK]
+    use_points = bool(eligible) and all(
+        b.points_min is not None and b.points_max is not None for b in eligible
+    )
+
+    def sort_key(b: BidderScore) -> tuple[int, float, float]:
+        pts = _r(b.points_min) if use_points else 0.0  # type: ignore[arg-type]
+        return (_RANK_GROUP[b.verdict], -pts, -_r(b.compliance_min))
+
+    ordered = sorted(eligible, key=sort_key)  # stable: equal bidders keep the input order
+
+    ranks: dict[int, int] = {}
+    previous: tuple[int, float, float] | None = None
+    current = 0
+    for position, b in enumerate(ordered, start=1):
+        key = sort_key(b)
+        if key != previous:
+            current = position
+            previous = key
+        ranks[b.key] = current
+
+    flagged: set[int] = set()
+    for upper, lower in zip(ordered, ordered[1:]):
+        if upper.verdict != lower.verdict:
+            continue  # the verdict group decides: no range is involved
+        if sort_key(upper) == sort_key(lower):
+            continue  # tie: no deciding step
+        if use_points and _r(upper.points_min) != _r(lower.points_min):  # type: ignore[arg-type]
+            overlap = _r(lower.points_max) >= _r(upper.points_min)  # type: ignore[arg-type]
+        else:
+            overlap = _r(lower.compliance_max) >= _r(upper.compliance_min)
+        if overlap:
+            flagged.update({upper.key, lower.key})
+
+    out = [
+        BidderRank(key=b.key, verdict=b.verdict, rank=ranks[b.key], order_not_certain=b.key in flagged)
+        for b in ordered
+    ]
+    out.extend(BidderRank(key=b.key, verdict=b.verdict, rank=None, order_not_certain=False) for b in rejected)
+    return out
