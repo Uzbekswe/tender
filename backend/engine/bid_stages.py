@@ -125,11 +125,18 @@ def _most_common(items: list[Any]) -> Any | None:
     return counted[0][0] if counted else None
 
 
-def _row_doc_type(card_type: str | None, document_type: str | None) -> str | None:
+SINGLE_DOCUMENT_MAX_PAGES = 10
+
+
+def _row_doc_type(card_type: str | None, document_type: str | None, page_count: int | None = None) -> str | None:
     """The type of a page: its card's type, unless the card says "other" or has none. Then the type of
     its document (the majority of the document's page cards, see pipeline), so one page's wording
-    does not decide whether its document is a proof."""
+    does not decide whether its document is a proof. Only for a short file that holds one document:
+    a long file is often a whole bid merged into one PDF, and its majority type says nothing about
+    a single page."""
     if card_type and card_type != "other":
+        return card_type
+    if page_count is not None and page_count > SINGLE_DOCUMENT_MAX_PAGES:
         return card_type
     return document_type or card_type
 
@@ -264,7 +271,8 @@ def _load_bid(package_id: int) -> _Bid:
                 read_quality=float(page.read_quality or 0.0),
                 usable=not is_duplicate and not page.unreadable and bool(text.strip()),
                 unread=not is_duplicate and (page.unreadable or page.source == PageSource.none),
-                doc_type=_row_doc_type(card.doc_type if card else None, docs[page.document_id].doc_type),
+                doc_type=_row_doc_type(card.doc_type if card else None, docs[page.document_id].doc_type,
+                                       docs[page.document_id].page_count),
                 summary=(card.summary_ru or "") if card else "",
                 keywords=tuple(card.keywords or []) if card else (),
                 entities=list(card.entities or []) if card else [],
@@ -863,13 +871,12 @@ def _verify_item(ev: EvidenceOut, bid: _Bid, req: _Req) -> _Found | None:
         row=row,
         method=result.method or "exact",
         page_corrected=result.page_corrected,
-        # A declaration is the bidder's own statement: any claim document (letter, form, offer) is
-        # what the tender asks for, whichever claim type the tender happened to name.
-        from_confirming=(not req.evidence_doc_types or row.doc_type in req.evidence_doc_types
-                         or (declaration and row.doc_type in verdict.CLAIM_DOC_TYPES)),
+        # A declaration is the bidder's own statement: a verified statement by the bidder is what the
+        # tender asks for, on whatever page it stands. Page types vary between runs; this must not.
+        from_confirming=(declaration or not req.evidence_doc_types or row.doc_type in req.evidence_doc_types),
         subject_is_bidder=_subject_is_bidder(ev.subject, ev.subject_stir, bid),
         doc_type=row.doc_type,
-        is_proof=verdict.is_proof_item(row.doc_type, declaration=declaration),
+        is_proof=declaration or verdict.is_proof_item(row.doc_type, declaration=declaration),
     )
 
 
@@ -925,7 +932,8 @@ def _hard_rules(*, req: _Req, final: _Final, judgement: str | None, claimed: lis
 
 
 CLAIM_LABEL_NOTE = ("The model called this a claim without proof, but the quoted page is a proof document "
-                    "of an accepted type: the code treats the content as satisfied.")
+                    "of an accepted type, or the tender asks only for the bidder's own statement: the code "
+                    "treats the content as satisfied.")
 IGNORED_EXPERT_NOTE = "The model asked for an expert, but this is not an equivalence requirement: the flag is ignored."
 
 
