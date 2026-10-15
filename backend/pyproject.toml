@@ -1,0 +1,36 @@
+[project]
+name = "tender-sverka"
+version = "0.1.0"
+description = "Checks a supplier's bid against tender requirements (supplier-side MVP)"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "python-multipart>=0.0.12",
+    "jinja2>=3.1",
+    "sqlmodel>=0.0.22",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "pymupdf>=1.25",
+    "rarfile>=4.2",
+    "openai>=1.50",
+    "tenacity>=9.0",
+    "rank-bm25>=0.2.2",
+    "snowballstemmer>=2.2",
+    "rapidfuzz>=3.10",
+    "openpyxl>=3.1",
+    "python-docx>=1.1",
+    "httpx>=0.27",
+    "anthropic>=1.0",  # only for LLM_PROVIDER=anthropic_api; imported lazily
+]
+
+[dependency-groups]
+dev = ["pytest>=8.3", "pytest-asyncio>=0.24"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+pythonpath = ["."]

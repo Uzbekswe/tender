@@ -1,0 +1,15 @@
+# Default scoring settings (spec §7, ARCHITECTURE §7). Per-project overrides
+# live in Project.settings.
+
+review_threshold = 80   # confidence below this -> Needs human review
+
+[weights]               # w by requirement type
+mandatory = 3
+scored = 2              # replaced by the criterion's max points when a scheme exists
+desirable = 1
+
+[k]                     # coefficient by status; needs_review is excluded and shown as a range
+meets = 1.0
+partial = 0.5
+not_confirmed = 0.3
+does_not_meet = 0.0
