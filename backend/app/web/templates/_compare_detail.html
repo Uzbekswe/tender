@@ -94,6 +94,7 @@
     </section>
 
     <section class="side">
+      {% if not d.customer %}
       <h3>{{ t('compare.panel.recommendation') }}</h3>
       {% if d.recommendation %}
         <dl class="kv">
@@ -105,6 +106,7 @@
         </dl>
       {% else %}
         <p class="muted">{{ t('compare.panel.no_recommendation') }}</p>
+      {% endif %}
       {% endif %}
 
       {% if d.override %}
@@ -118,7 +120,7 @@
             action="/runs/{{ run_id }}/compare/items/{{ d.id }}/override"
             hx-post="/runs/{{ run_id }}/compare/items/{{ d.id }}/override"
             hx-target="#compare-panel" hx-swap="outerHTML">
-        <h3>{{ t('compare.override.title') }}</h3>
+        <h3>{{ t('customer.override.title') if d.customer else t('compare.override.title') }}</h3>
         <label>{{ t('compare.override.status') }}
           <select name="status">
             {% for o in d.options %}<option value="{{ o.value }}"{% if o.selected %} selected{% endif %}>{{ o.label }}</option>{% endfor %}

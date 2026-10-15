@@ -40,6 +40,6 @@
     <p><a href="/projects/{{ panel.project_id }}/checklist">{{ t('run.review_checklist') }}</a></p>
   {% endif %}
   {% if panel.run.kind == 'bid' and panel.run.status == 'done' %}
-    {% with run_id=panel.run.id, package_id=panel.run.package_id %}{% include "_run_nav.html" %}{% endwith %}
+    {% with run_id=panel.run.id, package_id=panel.run.package_id, customer=panel.customer %}{% include "_run_nav.html" %}{% endwith %}
   {% endif %}
 </div>

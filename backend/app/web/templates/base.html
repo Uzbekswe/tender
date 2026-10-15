@@ -11,11 +11,14 @@
 <header class="topbar">
   <a class="brand" href="/">{{ t('app.name') }}</a>
   <nav class="nav" aria-label="main">
-    <a href="/" class="{{ 'active' if active == 'projects' }}">{{ t('nav.projects') }}</a>
-    {% if nav_run_id %}
+    {% if side %}<a href="/{{ side }}" class="{{ 'active' if active in ('projects', 'supplier', 'customer') }}">{{ t('nav.projects') }}</a>{% endif %}
+    {% if nav_customer_id %}
+    <a href="/projects/{{ nav_customer_id }}/comparison" class="{{ 'active' if nav_section == 'matrix' }}">{{ t('nav.comparison') }}</a>
+    {% elif nav_run_id %}
     <a href="/runs/{{ nav_run_id }}/compare" class="{{ 'active' if nav_section == 'compare' }}">{{ t('nav.comparison') }}</a>
     <a href="/runs/{{ nav_run_id }}/summary" class="{{ 'active' if nav_section == 'summary' }}">{{ t('nav.summary') }}</a>
     {% endif %}
+    <a href="/" class="switch-role">{{ t('nav.switch_role') }}</a>
   </nav>
   <div class="lang" aria-label="{{ t('lang.label') }}">
     <a href="/lang/ru?next={{ next_url|urlencode }}" class="{{ 'on' if lang == 'ru' }}" hreflang="ru">RU</a>

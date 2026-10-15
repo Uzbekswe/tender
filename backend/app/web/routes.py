@@ -9,7 +9,7 @@ a fragment; a plain browser request gets a full page, or a redirect after a POST
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -18,6 +18,13 @@ from markupsafe import Markup, escape
 from pydantic import ValidationError
 from sqlmodel import Session, col, select
 
+from app.api.customer import (
+    add_decision,
+    check_all,
+    create_bidder,
+    delete_bidder,
+    list_decisions,
+)
 from app.api.checklist import (
     _enrich,
     add_requirement,
@@ -57,10 +64,19 @@ from app.models import (
 )
 from app.schemas import DocumentUpdate, PackageCreate, ProjectCreate, ProjectUpdate, RunCreate
 from app.schemas_checklist import ApplySuggestionsIn, MergeIn, RequirementIn, RequirementUpdate
+from app.schemas_customer import BidderCreate, DecisionIn
 from app.schemas_results import ItemOut, OverrideIn, ResultsOut
 from app.storage import FileStore, get_store
 from app.web.i18n import LANG_COOKIE, Translator, pick_lang, translator
 from engine.cards import DOC_TYPES
+from engine.comparison import (
+    ComparisonError,
+    approved_version,
+    bid_packages,
+    build_comparison,
+    finished_rows,
+    item_reasons,
+)
 from engine.recommend import CollectEntry, collect_list
 from engine.score_stages import ItemRow, RunRows, load_run_rows
 
@@ -111,7 +127,8 @@ def _render(request: Request, name: str, *, status_code: int = 200, **ctx: Any) 
 
 def _top_nav(ctx: dict[str, Any]) -> dict[str, Any]:
     """The top menu's Comparison and Summary: on a project's pages they link to the project's latest
-    finished bid run (base.html hides them when nav_run_id is None)."""
+    finished bid run (base.html hides them when nav_run_id is None). A customer project links to its
+    bidder matrix and ranking instead."""
     project = ctx.get("project")
     project_id = ctx.get("project_id")
     if project_id is None and project is not None:
@@ -119,9 +136,16 @@ def _top_nav(ctx: dict[str, Any]) -> dict[str, Any]:
     if project_id is None:
         project_id = ctx.get("pid")
     if project_id is None:
-        return {"nav_run_id": None}
+        return {"nav_run_id": None, "nav_customer_id": None, "side": ctx.get("side")}
     with session_scope() as session:
-        return {"nav_run_id": _latest_finished_bid_run(session, int(project_id))}
+        project_row = session.get(Project, int(project_id))
+        if _is_customer(project_row):
+            return {"nav_run_id": None, "nav_customer_id": int(project_id), "side": "customer"}
+        return {
+            "nav_run_id": _latest_finished_bid_run(session, int(project_id)),
+            "nav_customer_id": None,
+            "side": "supplier",
+        }
 
 
 def _redirect(url: str) -> RedirectResponse:
@@ -218,7 +242,7 @@ def _ensure_packages(session: Session, project: Project) -> tuple[Any, Any]:
     bid = next((p for p in packages if p.role == PackageRole.bid), None)
     if tender is None:
         tender = create_package(project.id, PackageCreate(role=PackageRole.tender, label="Tender"), session)
-    if bid is None:
+    if bid is None and not _is_customer(project):
         bid = create_package(project.id, PackageCreate(role=PackageRole.bid, label="Bid"), session)
     return tender, bid
 
@@ -297,12 +321,14 @@ def _latest_approved_number(session: Session, project_id: int) -> int | None:
     return latest.number if latest is not None and latest.status == "approved" else None
 
 
-def _panel(run: Any, tr: Translator, project_id: int, approved_version: int | None = None) -> dict[str, Any]:
+def _panel(run: Any, tr: Translator, project_id: int, approved_version: int | None = None,
+           *, customer: bool = False) -> dict[str, Any]:
     return {
         "run": run,
         "rows": _progress_rows(run, tr),
         "active": run.status in ACTIVE_RUN_STATUSES,
         "project_id": project_id,
+        "customer": customer,
         # The tender run waits for approval until its checklist is approved; then it shows that instead.
         "approved_version": approved_version if run.kind == RunKind.tender else None,
     }
@@ -318,11 +344,15 @@ def _projects_view(
     request: Request,
     session: Session,
     *,
+    side: str,
     status_code: int = 200,
     error: str | None = None,
     values: dict[str, str] | None = None,
 ) -> HTMLResponse:
-    projects = session.exec(select(Project).order_by(col(Project.id).desc())).all()
+    """The project list of one side (supplier or customer). The side also sets the mode of a new project."""
+    projects = session.exec(
+        select(Project).where(Project.mode == side).order_by(col(Project.id).desc())
+    ).all()
     scores = _latest_scores(session)
     rows = []
     for project in projects:
@@ -342,13 +372,29 @@ def _projects_view(
         status_code=status_code,
         rows=rows,
         error=error,
+        side=side,
         values=values or {"report_lang": "ru"},
+        active=side,
     )
 
 
+SIDES = ("supplier", "customer")
+
+
 @router.get("/", response_class=HTMLResponse)
-def projects_page(request: Request, session: Session = Depends(get_session)) -> HTMLResponse:
-    return _projects_view(request, session)
+def home_page(request: Request) -> HTMLResponse:
+    """The start page: the role choice. Each role has its own project list and its own screens."""
+    return _render(request, "home.html", active="home")
+
+
+@router.get("/supplier", response_class=HTMLResponse)
+def supplier_projects_page(request: Request, session: Session = Depends(get_session)) -> HTMLResponse:
+    return _projects_view(request, session, side="supplier")
+
+
+@router.get("/customer", response_class=HTMLResponse)
+def customer_projects_page(request: Request, session: Session = Depends(get_session)) -> HTMLResponse:
+    return _projects_view(request, session, side="customer")
 
 
 @router.post("/projects")
@@ -358,6 +404,7 @@ def create_project_page(
     customer: str = Form(""),
     submission_deadline: str = Form(""),
     report_lang: str = Form("ru"),
+    mode: str = Form("supplier"),
     session: Session = Depends(get_session),
 ) -> Response:
     values = {
@@ -365,21 +412,25 @@ def create_project_page(
         "customer": customer,
         "submission_deadline": submission_deadline,
         "report_lang": report_lang,
+        "mode": mode,
     }
+    side = mode if mode in SIDES else "supplier"
     try:
         body = ProjectCreate(
             name=name.strip(),
             customer=customer.strip() or None,
             submission_deadline=_parse_datetime(submission_deadline),
             report_lang=report_lang or "ru",
+            mode=side,
         )
     except ValueError:  # includes pydantic's ValidationError
         return _projects_view(
-            request, session, status_code=422, error=_tr(request)("error.form"), values=values
+            request, session, side=side, status_code=422, error=_tr(request)("error.form"), values=values
         )
     project = create_project(body, session)
     create_package(project.id, PackageCreate(role=PackageRole.tender, label="Tender"), session)
-    create_package(project.id, PackageCreate(role=PackageRole.bid, label="Bid"), session)
+    if body.mode == "supplier":  # a customer project gets its bidders added one by one
+        create_package(project.id, PackageCreate(role=PackageRole.bid, label="Bid"), session)
     return _redirect(f"/projects/{project.id}")
 
 
@@ -394,6 +445,8 @@ def _project_view(
     error: str | None = None,
     notice: str | None = None,
 ) -> HTMLResponse:
+    if _is_customer(project):
+        return _customer_project_view(request, session, project, status_code=status_code, error=error, notice=notice)
     tr = _tr(request)
     tender, bid = _ensure_packages(session, project)
     runs = session.exec(
@@ -430,10 +483,15 @@ def project_page(
     project_id: int,
     request: Request,
     skipped: int = 0,
+    checks: int = 0,
+    checks_skipped: int = 0,
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     project = _project_or_404(session, project_id)
-    notice = _tr(request)("upload.skipped", n=skipped) if skipped > 0 else None
+    tr = _tr(request)
+    notice = tr("upload.skipped", n=skipped) if skipped > 0 else None
+    if checks or checks_skipped:  # back from "Check all bidders"
+        notice = f"{tr('customer.check_all.started', n=checks)} {tr('customer.check_all.skipped', n=checks_skipped)}"
     return _project_view(request, session, project, notice=notice)
 
 
@@ -1142,6 +1200,7 @@ def _top_view(session: Session, tr: Translator, run_id: int, results: ResultsOut
     if score is None:
         return {"scored": False}
     counts = {s: int(score.counts.get(s, 0)) for s in COMPARE_STATUSES}
+    customer = _run_is_customer(session, run_id)
     checks = _platform_checks(results)
     platform_text = None
     if checks:
@@ -1170,7 +1229,9 @@ def _top_view(session: Session, tr: Translator, run_id: int, results: ResultsOut
     return {
         "scored": True,
         "verdict": str(results.verdict or ""),
-        "verdict_label": tr(f"verdict.{results.verdict}") if results.verdict else "",
+        "verdict_label": (
+            tr(f"committee.verdict.{results.verdict}") if customer else tr(f"verdict.{results.verdict}")
+        ) if results.verdict else "",
         "deciding": _deciding_view(session, tr, run_id, results),
         "overall": f"{score.overall:.1f}%",
         "range": f"{score.range_min:.1f}–{score.range_max:.1f}",
@@ -1292,6 +1353,7 @@ def _detail_view(session: Session, tr: Translator, run_id: int, requirement_id: 
     return {
         "id": req.id,
         "run_id": run_id,
+        "customer": _run_is_customer(session, run_id),
         "code": req.code,
         "parameter": name,
         "parameter_original": req.parameter if req.parameter.strip() and req.parameter.strip() != name else None,
@@ -1323,9 +1385,24 @@ def _detail_view(session: Session, tr: Translator, run_id: int, requirement_id: 
     }
 
 
+def _decision_view(request: Request, session: Session, rows: RunRows) -> dict[str, Any]:
+    """The committee decision form and history of the bidder shown on a customer split view."""
+    package = session.get(Package, rows.run.package_id)
+    return {
+        "name": (package.bidder_name or package.label) if package is not None else "",
+        "action": f"/projects/{rows.project.id}/bidders/{rows.run.package_id}/decision",
+        "next": _current_path(request),
+        "history": [
+            {"member": d.member_name, "text": d.text, "at": _deadline_text(d.at)}
+            for d in list_decisions(project_id=rows.project.id, package_id=rows.run.package_id, session=session)
+        ],
+    }
+
+
 def _compare_context(request: Request, session: Session, run_id: int, *, filtered: int, issues: int,
                      scope: str, status: str, req: int | None,
-                     error: str | None = None, notice: str | None = None) -> dict[str, Any]:
+                     error: str | None = None, notice: str | None = None,
+                     decision_state: str = "") -> dict[str, Any]:
     tr = _tr(request)
     only_issues, scope_value, status_value = _filters(filtered, issues, scope, status)
     results = get_results(
@@ -1340,12 +1417,17 @@ def _compare_context(request: Request, session: Session, run_id: int, *, filtere
     ids = [it.requirement.id for it in items]
     platform_ids = {int(c["requirement_id"]) for c in _platform_checks(results)}
     selected_id = req if req in ids or req in platform_ids else (ids[0] if ids else None)
+    customer = _is_customer(rows.project)
     return {
         "run_id": run_id,
         "project_id": rows.project.id,
         "project_name": rows.project.name,
         "package_id": results.package_id,
         "nav_section": "compare",
+        "customer": customer,
+        "switcher": _bidder_switcher(session, rows, selected_id) if customer else None,
+        "decision": _decision_view(request, session, rows) if customer else None,
+        "decision_state": decision_state,
         "top": _top_view(session, tr, run_id, results, _stated_max(rows),
                          only_issues=only_issues, status_filter=status_value),
         "platform_card": _platform_card(session, tr, run_id, results),
@@ -1364,9 +1446,10 @@ def _compare_context(request: Request, session: Session, run_id: int, *, filtere
 
 def _compare_page(request: Request, session: Session, run_id: int, *, filtered: int = 0, issues: int = 1,
                   scope: str = "", status: str = "", req: int | None = None,
-                  error: str | None = None, notice: str | None = None, status_code: int = 200) -> HTMLResponse:
+                  error: str | None = None, notice: str | None = None, status_code: int = 200,
+                  decision_state: str = "") -> HTMLResponse:
     ctx = _compare_context(request, session, run_id, filtered=filtered, issues=issues, scope=scope,
-                           status=status, req=req, error=error, notice=notice)
+                           status=status, req=req, error=error, notice=notice, decision_state=decision_state)
     return _render(request, "compare.html", status_code=status_code, **ctx)
 
 
@@ -1379,10 +1462,11 @@ def compare_page(
     scope: str = "",
     status: str = "",
     req: int | None = None,
+    decision: str = "",
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     return _compare_page(request, session, run_id, filtered=filtered, issues=issues,
-                         scope=scope, status=status, req=req)
+                         scope=scope, status=status, req=req, decision_state=decision)
 
 
 @router.get("/runs/{run_id}/compare/items/{requirement_id}", response_model=None)
@@ -1496,9 +1580,14 @@ def _platform_reply(request: Request, session: Session, run_id: int, requirement
 
 # ---------- summary ----------
 
-def _summary_item(tr: Translator, run_id: int, item: ItemOut) -> dict[str, Any]:
+NOT_PROVIDED_REASONS = frozenset({"ABSENT", "CLAIM_ONLY"})  # "Not provided by bidder" on the customer summary
+
+
+def _summary_item(tr: Translator, run_id: int, item: ItemOut,
+                  sentences: dict[int, str] | None = None) -> dict[str, Any]:
     rec = item.recommendation
     return {
+        "id": item.requirement.id,
         "code": item.requirement.code,
         "parameter": display_name(item.requirement.parameter, item.requirement.parameter_ru, tr.lang),
         "status": item.status,
@@ -1508,6 +1597,7 @@ def _summary_item(tr: Translator, run_id: int, item: ItemOut) -> dict[str, Any]:
         "action": rec.action if rec is not None else "",
         "action_type": tr.get(f"action_type.{rec.action_type}", rec.action_type) if rec is not None else "",
         "impact": f"{rec.impact_pct:+g}%" if rec is not None else "",
+        "sentence": (sentences or {}).get(item.requirement.id, ""),  # committee wording, customer runs only
     }
 
 
@@ -1523,7 +1613,8 @@ def _plural_form(lang: str, n: int) -> str:
 
 
 def _summary_context(session: Session, tr: Translator, run_id: int, results: ResultsOut,
-                     stated_max: float | None, project_id: int, project_name: str) -> dict[str, Any]:
+                     stated_max: float | None, project_id: int, project_name: str, *,
+                     customer: bool = False, sentences: dict[int, str] | None = None) -> dict[str, Any]:
     items = _document_items(results)
     score = results.score
     platform = []
@@ -1557,7 +1648,7 @@ def _summary_context(session: Session, tr: Translator, run_id: int, results: Res
 
     headline = None
     if score is not None:
-        verdict = tr(f"verdict.{score.verdict}")
+        verdict = tr(f"committee.verdict.{score.verdict}") if customer else tr(f"verdict.{score.verdict}")
         points = _points_range(score, stated_max)
         if points is not None:
             headline = tr("summary.headline", verdict=verdict, overall=f"{score.overall:.1f}", points=points,
@@ -1570,33 +1661,37 @@ def _summary_context(session: Session, tr: Translator, run_id: int, results: Res
             headline += " " + tr(f"summary.headline.platform.{_plural_form(tr.lang, len(platform))}",
                                  n=len(platform))
 
+    def listed(items: list[ItemOut]) -> list[dict[str, Any]]:
+        return [_summary_item(tr, run_id, it, sentences) for it in items]
+
+    not_provided = [it for it in critical + reducing if set(it.reasons) & NOT_PROVIDED_REASONS]
     return {
         "run_id": run_id,
         "project_id": project_id,
         "project_name": project_name,
         "package_id": results.package_id,
         "nav_section": "summary",
+        "customer": customer,
         "headline": headline,
         "platform": platform,
-        "critical": [_summary_item(tr, run_id, it) for it in critical],
-        "reducing": [_summary_item(tr, run_id, it) for it in reducing],
-        "review": [_summary_item(tr, run_id, it) for it in items if it.status == "needs_review"],
+        "critical": listed(critical),
+        "reducing": listed(reducing),
+        "review": listed([it for it in items if it.status == "needs_review"]),
         "contradictions": [{"text": c.description} for c in results.contradictions],
         "questions": [
             {"kind": tr.get(f"questions.kind.{q.kind}", str(q.kind)), "text": q.text}
             for q in results.questions
         ],
-        "strengths": [
-            _summary_item(tr, run_id, it)
-            for it in items if it.status == "meets" and it.requirement.type == "scored"
-        ],
-        "plan": [_summary_item(tr, run_id, it) for it in plan],
-        "collect": [
+        "strengths": listed([it for it in items if it.status == "meets" and it.requirement.type == "scored"]),
+        # A customer summary has no advice: no action plan, no impact, no clarification letter.
+        "plan": [] if customer else listed(plan),
+        "collect": [] if customer else [
             {"code": e.code, "parameter": e.parameter, "action": e.action, "impact": f"{e.impact_pct:+g}%"}
             for e in collect
         ],
+        "not_provided": listed(not_provided) if customer else [],
         "xlsx_url": f"/api/v1/runs/{run_id}/export/xlsx",
-        "clarification_url": f"/api/v1/projects/{project_id}/export/clarification.txt",
+        "clarification_url": None if customer else f"/api/v1/projects/{project_id}/export/clarification.txt",
     }
 
 
@@ -1605,7 +1700,11 @@ def summary_page(run_id: int, request: Request, session: Session = Depends(get_s
     tr = _tr(request)
     results = get_results(run_id=run_id, session=session)
     rows = _run_rows_or_404(session, run_id)
-    ctx = _summary_context(session, tr, run_id, results, _stated_max(rows), rows.project.id, rows.project.name)
+    customer = _is_customer(rows.project)
+    ctx = _summary_context(
+        session, tr, run_id, results, _stated_max(rows), rows.project.id, rows.project.name,
+        customer=customer, sentences=item_reasons(rows, tr) if customer else None,
+    )
     return _render(request, "summary.html", **ctx)
 
 
@@ -1668,3 +1767,340 @@ def history_page(package_id: int, request: Request, session: Session = Depends(g
         sparkline_label=tr("history.sparkline"),
         nav_section="history",
     )
+
+
+# ---------- customer side: bidders, matrix, ranking (docs/customer-side-decisions.md §4-6) ----------
+# Every screen here reads the same functions as the JSON API (app.api.customer, engine.comparison).
+# Nothing on these screens awards, rejects or advises: the output is labelled advisory.
+
+CUSTOMER_MODE = "customer"
+COUNT_KEYS = (
+    ("meets", "meets"), ("partial", "partial"), ("not_confirmed", "not_confirmed"),
+    ("does_not_meet", "not_met"), ("needs_review", "needs_review"),
+)  # (status, key in the payload's counts)
+
+
+def _is_customer(project: Project | None) -> bool:
+    return project is not None and project.mode == CUSTOMER_MODE
+
+
+def _customer_or_404(session: Session, project_id: int) -> Project:
+    """The customer screens exist only for a customer project; a supplier project gets a 404 there."""
+    project = _project_or_404(session, project_id)
+    if not _is_customer(project):
+        raise HTTPException(status_code=404, detail="not a customer project")
+    return project
+
+
+def _with_query(url: str, **params: str) -> str:
+    """The URL with these query parameters set (replacing any with the same name)."""
+    parts = urlsplit(url)
+    query = dict(parse_qsl(parts.query, keep_blank_values=True))
+    query.update(params)
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+
+
+def _run_is_customer(session: Session, run_id: int) -> bool:
+    run = session.get(Run, run_id)
+    if run is None:
+        return False
+    package = session.get(Package, run.package_id)
+    return package is not None and _is_customer(session.get(Project, package.project_id))
+
+
+def _bidder_switcher(session: Session, rows: RunRows, requirement_id: int | None) -> list[dict[str, Any]]:
+    """The bidders of a customer project as tabs on the split view. Each tab keeps the requirement and
+    opens that bidder's finished check on the approved checklist (no link when it has none)."""
+    version = approved_version(session, rows.project.id)
+    tabs = []
+    for pkg in bid_packages(session, rows.project.id):
+        finished = finished_rows(session, pkg.id, version.id) if version is not None else None
+        tabs.append({
+            "name": pkg.bidder_name or pkg.label,
+            "active": pkg.id == rows.run.package_id,
+            "href": _compare_url(finished.run.id, only_issues=False, req=requirement_id) if finished else None,
+        })
+    return tabs
+
+
+def _points_view(tr: Any, points: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Tender points against the pass mark, as text with the class and label of the verdict."""
+    if points is None:
+        return None
+    text = tr("comparison.points", min=_fmt(points["min"]), max=_fmt(points["max"]))
+    if points.get("pass_mark") is not None:
+        text += ", " + tr("comparison.pass_mark", pass_mark=_fmt(points["pass_mark"]))
+    verdict = points.get("verdict")
+    return {
+        "text": text,
+        "cls": verdict if verdict in POINTS_CLASSES else "",
+        "label": tr(f"points.{verdict}") if verdict in POINTS_CLASSES else "",
+        "note": points.get("note"),
+    }
+
+
+def _bidder_view(tr: Any, b: dict[str, Any]) -> dict[str, Any]:
+    """One bidder column or ranking row, from one bidder of the comparison payload."""
+    comp = b["compliance"]
+    counts = b["counts"]
+    deciding = "; ".join(f"{d['code']}: {d['text']}" for d in b["deciding_items"]) if b["run_id"] else ""
+    return {
+        "package_id": b["package_id"],
+        "name": b["name"],
+        "stir": b["stir"],
+        "run_id": b["run_id"],
+        "rank": b["rank"],
+        "rank_text": str(b["rank"]) if b["rank"] is not None else tr("committee.xlsx.none"),
+        "verdict": b["verdict"],
+        "verdict_text": b["verdict_committee_text"],
+        "compliance": tr("comparison.compliance", point=f"{comp['point']:.1f}", min=f"{comp['min']:.1f}",
+                         max=f"{comp['max']:.1f}") if comp else None,
+        "points": _points_view(tr, b["points"]),
+        "mandatory": tr("compare.score.mandatory", met=b["mandatory_met"], total=b["mandatory_total"])
+        if b["mandatory_total"] is not None else None,
+        "order_not_certain": b["order_not_certain"],
+        "counts": [
+            {"status": status, "label": tr(f"status.{status}"), "count": counts.get(key, 0)}
+            for status, key in COUNT_KEYS
+        ] if counts else None,
+        "tooltip": f"{tr('comparison.deciding')}: {deciding}" if deciding else "",
+        "summary_href": f"/runs/{b['run_id']}/summary" if b["run_id"] else None,
+    }
+
+
+def _matrix_view(session: Session, tr: Any, project: Project, data: dict[str, Any]) -> dict[str, Any]:
+    """The matrix: one column per bidder (in the payload's order: ranked first), one row per requirement,
+    with a group heading when the scope or the category changes. Each cell links to the split view."""
+    version = approved_version(session, project.id)
+    reasons: dict[int, dict[int, str]] = {}
+    for pkg in bid_packages(session, project.id):
+        rows = finished_rows(session, pkg.id, version.id) if version is not None else None
+        if rows is not None:
+            reasons[pkg.id] = item_reasons(rows, tr)
+    bidders = [_bidder_view(tr, b) for b in data["bidders"]]
+    names = {}
+    if version is not None:  # the name on the screen follows the UI language (Russian name when there is one)
+        names = {
+            req.id: req for req in session.exec(
+                select(Requirement).where(Requirement.checklist_version_id == version.id)
+            ).all()
+        }
+    out_rows: list[dict[str, Any]] = []
+    scope_prev: str | None = None
+    category_prev: str | None = None
+    for row in data["rows"]:
+        scope_new = row["scope"] != scope_prev
+        category_new = scope_new or row["category"] != category_prev
+        scope_prev, category_prev = row["scope"], row["category"]
+        cells = []
+        for b in bidders:
+            cell = row["cells"].get(b["package_id"]) or {}
+            status = cell.get("status")
+            short = cell.get("reason_short") or ""
+            cells.append({
+                "status": status,
+                "label": tr(f"status.{status}") if status else "",
+                "short": short,
+                "full": reasons.get(b["package_id"], {}).get(row["requirement_id"]) or short,
+                "href": _compare_url(b["run_id"], only_issues=False, req=row["requirement_id"])
+                if status and b["run_id"] else None,
+            })
+        out_rows.append({
+            "id": row["requirement_id"],
+            "code": row["code"],
+            "name": display_name(row["name"], names[row["requirement_id"]].parameter_ru if row["requirement_id"] in names else None, tr.lang),
+            "req_type": row["req_type"],
+            "platform": row["platform"],
+            "scope_label": tr(f"checklist.scope.{row['scope']}") if scope_new else None,
+            "category_label": _category_label(tr, row["category"]) if category_new else None,
+            "cells": cells,
+        })
+    return {"bidders": bidders, "rows": out_rows, "warnings": data["warnings"]}
+
+
+def _matrix_query(filters: dict[str, Any]) -> str:
+    params = {
+        "scope": filters["scope"],
+        "only_mandatory": 1 if filters["only_mandatory"] else "",
+        "only_differences": 1 if filters["only_differences"] else "",
+        "only_problems": 1 if filters["only_problems"] else "",
+    }
+    return urlencode({key: value for key, value in params.items() if value != ""})
+
+
+def _matrix_context(
+    request: Request, session: Session, project: Project, *,
+    scope: str, only_mandatory: bool, only_differences: bool, only_problems: bool,
+) -> dict[str, Any]:
+    tr = _tr(request)
+    scope_value = scope if scope in SCOPES else ""
+    filters = {
+        "scope": scope_value,
+        "only_mandatory": only_mandatory,
+        "only_differences": only_differences,
+        "only_problems": only_problems,
+    }
+    query = _matrix_query(filters)
+    ctx: dict[str, Any] = {
+        "project": project,
+        "project_id": project.id,
+        "project_name": project.name,
+        "nav_section": "matrix",
+        "active": "projects",
+        "filters": filters,
+        "query": query,
+        "not_ready": False,
+        "matrix": None,
+        "advisory": tr("committee.advisory"),
+        "xlsx_href": f"/api/v1/projects/{project.id}/comparison.xlsx" + (f"?{query}" if query else ""),
+    }
+    try:
+        data = build_comparison(
+            session, project.id, tr,
+            only_mandatory=only_mandatory, only_differences=only_differences, only_problems=only_problems,
+            scope=scope_value or None,
+        )
+    except ComparisonError:
+        ctx["not_ready"] = True
+        return ctx
+    ctx["matrix"] = _matrix_view(session, tr, project, data)
+    return ctx
+
+
+def _bidder_cards(session: Session, tr: Any, project: Project) -> list[dict[str, Any]]:
+    """One card per bidder: its files, its latest check, and whether it can still be removed (no check)."""
+    cards = []
+    for pkg in bid_packages(session, project.id):
+        runs = session.exec(select(Run).where(Run.package_id == pkg.id).order_by(col(Run.id).desc())).all()
+        cards.append({
+            "id": pkg.id,
+            "package": pkg,
+            "name": pkg.bidder_name or pkg.label,
+            "stir": pkg.bidder_stir,
+            "docs": _documents(session, pkg.id),
+            "panel": _panel(runs[0], tr, project.id, customer=True) if runs else None,
+            "removable": not runs,
+        })
+    return cards
+
+
+def _customer_project_view(
+    request: Request, session: Session, project: Project, *,
+    status_code: int = 200, error: str | None = None, notice: str | None = None,
+) -> HTMLResponse:
+    tr = _tr(request)
+    tender, _ = _ensure_packages(session, project)
+    approved_number = _latest_approved_number(session, project.id)
+    tender_runs = session.exec(
+        select(Run).where(Run.package_id == tender.id).order_by(col(Run.id).desc()).limit(8)
+    ).all()
+    return _render(
+        request,
+        "project_customer.html",
+        status_code=status_code,
+        project=project,
+        tender=tender,
+        tender_docs=_documents(session, tender.id),
+        doc_types=DOC_TYPES,
+        approved=_has_approved_checklist(session, project.id),
+        panels=[_panel(run, tr, project.id, approved_number) for run in tender_runs],
+        cards=_bidder_cards(session, tr, project),
+        deadline=_deadline_status(project.submission_deadline),
+        deadline_text=_deadline_text(project.submission_deadline),
+        deadline_input=_dt_input(project.submission_deadline),
+        error=error,
+        notice=notice,
+        active="projects",
+    )
+
+
+@router.post("/projects/{project_id}/bidders")
+def add_bidder_page(
+    project_id: int,
+    request: Request,
+    name: str = Form(""),
+    stir: str = Form(""),
+    session: Session = Depends(get_session),
+) -> Response:
+    project = _customer_or_404(session, project_id)
+    tr = _tr(request)
+    try:
+        package = create_bidder(project_id=project.id, body=BidderCreate(name=name, stir=stir.strip() or None),
+                                session=session)
+    except (HTTPException, ValidationError) as exc:
+        session.rollback()
+        if isinstance(exc, HTTPException):
+            return _project_view(request, session, project, status_code=exc.status_code, error=_error_text(tr, exc))
+        return _project_view(request, session, project, status_code=422, error=tr("customer.bidders.invalid"))
+    return _redirect(f"/projects/{project.id}#bidder-{package.id}")
+
+
+@router.post("/projects/{project_id}/bidders/{package_id}/remove")
+def remove_bidder_page(
+    project_id: int,
+    package_id: int,
+    request: Request,
+    session: Session = Depends(get_session),
+    store: FileStore = Depends(get_store),
+) -> Response:
+    project = _customer_or_404(session, project_id)
+    try:
+        delete_bidder(project_id=project.id, package_id=package_id, session=session, store=store)
+    except HTTPException as exc:
+        session.rollback()
+        return _project_view(request, session, project, status_code=exc.status_code,
+                             error=_error_text(_tr(request), exc))
+    return _redirect(f"/projects/{project.id}")
+
+
+@router.post("/projects/{project_id}/check-all")
+def check_all_page(project_id: int, request: Request, session: Session = Depends(get_session)) -> Response:
+    project = _customer_or_404(session, project_id)
+    try:
+        result = check_all(project_id=project.id, session=session)
+    except HTTPException as exc:
+        session.rollback()
+        return _project_view(request, session, project, status_code=exc.status_code,
+                             error=_error_text(_tr(request), exc))
+    return _redirect(f"/projects/{project.id}?checks={len(result.runs)}&checks_skipped={len(result.skipped)}")
+
+
+@router.get("/projects/{project_id}/comparison", response_class=HTMLResponse)
+def comparison_page(
+    project_id: int,
+    request: Request,
+    scope: str = "",
+    only_mandatory: bool = False,
+    only_differences: bool = False,
+    only_problems: bool = False,
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
+    project = _customer_or_404(session, project_id)
+    ctx = _matrix_context(
+        request, session, project, scope=scope, only_mandatory=only_mandatory,
+        only_differences=only_differences, only_problems=only_problems,
+    )
+    # HTMX filter changes swap only the body of the matrix; a plain request gets the whole page.
+    return _render(request, "_comparison_body.html" if _is_htmx(request) else "comparison.html", **ctx)
+
+
+@router.post("/projects/{project_id}/bidders/{package_id}/decision")
+def decision_page(
+    project_id: int,
+    package_id: int,
+    member_name: str = Form(""),
+    text: str = Form(""),
+    next_url: str = Form("", alias="next"),
+    session: Session = Depends(get_session),
+) -> Response:
+    """A committee decision on one bidder, written from its split view. Logged in the audit log only.
+    Back to the split view that sent it, with the outcome in the query string."""
+    project = _customer_or_404(session, project_id)
+    back = next_url if next_url.startswith("/runs/") and "//" not in next_url else f"/projects/{project.id}/comparison"
+    try:
+        add_decision(project_id=project.id, package_id=package_id,
+                     body=DecisionIn(member_name=member_name, text=text), session=session)
+    except ValidationError:
+        session.rollback()
+        return _redirect(_with_query(back, decision="invalid"))
+    return _redirect(_with_query(back, decision="saved"))

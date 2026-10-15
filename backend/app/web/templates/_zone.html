@@ -1,0 +1,59 @@
+{# The upload drop zone and the file list of one package. The caller sets `zone` (title, package, docs)
+   and the heading. Uploads post to the package's own URL, so bidders and the tender use the same code. #}
+    <form class="dropzone" method="post"
+          action="/projects/{{ project.id }}/packages/{{ zone.package.id }}/upload"
+          enctype="multipart/form-data"
+          data-zone
+          data-uploading="{{ t('project.zone.uploading') }}"
+          data-failed="{{ t('project.zone.failed') }}">
+      <p class="muted">{{ t('project.zone.hint') }}</p>
+      <input type="file" name="files" multiple class="file-input" aria-label="{{ zone.title }}">
+      <button type="submit" class="btn primary">{{ t('project.zone.upload') }}</button>
+      <div class="progress" hidden><div class="bar"></div></div>
+      <p class="zone-msg" role="status"></p>
+    </form>
+
+    {% if zone.docs %}
+    <div class="table-wrap">
+    <table class="data docs">
+      <thead>
+        <tr>
+          <th>{{ t('project.docs.file') }}</th>
+          <th>{{ t('project.docs.type') }}</th>
+          <th>{{ t('project.docs.warnings') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for d in zone.docs %}
+        <tr>
+          <td data-label="{{ t('project.docs.file') }}">
+            {{ d.file_name }}
+            {% if d.path_in_archive %}<div class="muted small">{{ d.path_in_archive }}</div>{% endif %}
+            {% if d.page_count %}<div class="muted small">{{ d.page_count }} {{ t('project.docs.pages') }}</div>{% endif %}
+          </td>
+          <td data-label="{{ t('project.docs.type') }}">
+            <form method="post" action="/projects/{{ project.id }}/documents/{{ d.id }}/doc-type" class="inline-form">
+              <select name="doc_type" aria-label="{{ t('project.docs.type') }}">
+                {% if not d.doc_type %}<option value="" selected>{{ t('project.docs.undetected') }}</option>{% endif %}
+                {% for dt in doc_types %}
+                  <option value="{{ dt }}" {% if d.doc_type == dt %}selected{% endif %}>{{ t('doc_type.' ~ dt) }}</option>
+                {% endfor %}
+              </select>
+              <button type="submit" class="btn small">{{ t('project.docs.save') }}</button>
+            </form>
+          </td>
+          <td data-label="{{ t('project.docs.warnings') }}">
+            {% for w in d.warnings %}
+              <div class="warn-line">{% if w is mapping %}{{ w.get('message', w) }}{% else %}{{ w }}{% endif %}</div>
+            {% else %}
+              {{ t('common.none') }}
+            {% endfor %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+    <p class="muted">{{ t('project.docs.empty') }}</p>
+    {% endif %}

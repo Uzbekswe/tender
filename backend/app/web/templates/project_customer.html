@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}{{ project.name }}{% endblock %}
+{% block content %}
+<p><a href="/">{{ t('project.back') }}</a></p>
+<h1>{{ project.name }}</h1>
+<p class="muted">{{ t('mode.customer') }}{% if project.customer %} · {{ project.customer }}{% endif %}</p>
+
+{% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+{% if notice %}<div class="alert alert-ok" role="status">{{ notice }}</div>{% endif %}
+
+<section class="card">
+  <h2>{{ t('deadline.title') }}</h2>
+  {% if not project.submission_deadline %}
+    <div class="alert alert-warn" role="alert"><strong>{{ t('deadline.missing') }}</strong></div>
+  {% else %}
+    <p>
+      <strong>{{ deadline_text }}</strong>
+      <span class="muted">· {{ t('deadline.' ~ deadline.state, n=deadline.days) }}</span>
+    </p>
+  {% endif %}
+  <form method="post" action="/projects/{{ project.id }}/deadline" class="inline-form">
+    <input type="datetime-local" name="submission_deadline" value="{{ deadline_input }}" aria-label="{{ t('deadline.title') }}">
+    <button type="submit" class="btn">{{ t('deadline.save') }}</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>{{ t('project.zone.customer') }}</h2>
+  {% with zone = {'title': t('project.zone.customer'), 'package': tender, 'docs': tender_docs} %}
+    {% include "_zone.html" %}
+  {% endwith %}
+  <div class="actions">
+    <form method="post" action="/projects/{{ project.id }}/packages/{{ tender.id }}/runs" class="inline-form">
+      <button type="submit" class="btn primary">{{ t('project.actions.analyse') }}</button>
+    </form>
+    <a class="btn" href="/projects/{{ project.id }}/checklist">{{ t('project.actions.open_checklist') }}</a>
+  </div>
+  {% if not approved %}<p class="muted">{{ t('project.actions.check_bid_locked') }}</p>{% endif %}
+</section>
+
+<section class="card" id="bidders">
+  <h2>{{ t('customer.bidders.title') }} <span class="muted small">({{ cards|length }})</span></h2>
+  <p class="muted small">{{ t('customer.check_all.hint') }}</p>
+
+  <div class="actions">
+    <form method="post" action="/projects/{{ project.id }}/check-all" class="inline-form">
+      <button type="submit" class="btn primary" {% if not approved or not cards %}disabled aria-disabled="true"{% endif %}>{{ t('customer.check_all') }}</button>
+    </form>
+    {% if approved and cards %}
+      <a class="btn" href="/projects/{{ project.id }}/comparison">{{ t('nav.comparison') }}</a>
+    {% endif %}
+  </div>
+  {% if not approved %}
+    <p class="muted">{{ t('project.actions.check_bid_locked') }}</p>
+  {% elif not cards %}
+    <p class="muted">{{ t('customer.check_all.no_bidders') }}</p>
+  {% endif %}
+
+  <form method="post" action="/projects/{{ project.id }}/bidders" class="form-grid bidder-add">
+    <label>{{ t('customer.bidders.name') }}
+      <input type="text" name="name" required maxlength="120">
+    </label>
+    <label>{{ t('customer.bidders.stir') }}
+      <input type="text" name="stir" inputmode="numeric" pattern="[0-9]{9}" maxlength="9">
+    </label>
+    <div class="form-actions">
+      <button type="submit" class="btn primary">{{ t('customer.bidders.add') }}</button>
+    </div>
+  </form>
+</section>
+
+{% for c in cards %}
+<article class="card bidder" id="bidder-{{ c.id }}">
+  <header class="panel-head">
+    <div>
+      <h3>{{ c.name }}</h3>
+      {% if c.stir %}<div class="muted small">{{ t('customer.bidders.stir_label') }}: <span class="code">{{ c.stir }}</span></div>{% endif %}
+    </div>
+    <div class="panel-badges">
+      <form method="post" action="/projects/{{ project.id }}/bidders/{{ c.id }}/remove" class="inline-form">
+        <button type="submit" class="btn small" {% if not c.removable %}disabled aria-disabled="true"{% endif %}>{{ t('customer.bidders.remove') }}</button>
+      </form>
+    </div>
+  </header>
+  {% if not c.removable %}<p class="muted small">{{ t('customer.bidders.remove_locked') }}</p>{% endif %}
+
+  {% with zone = {'title': c.name, 'package': c.package, 'docs': c.docs} %}
+    {% include "_zone.html" %}
+  {% endwith %}
+
+  {% if c.panel %}
+    {% with panel = c.panel %}{% include "_run_panel.html" %}{% endwith %}
+  {% else %}
+    <p class="muted small">{{ t('customer.bidder.no_run') }}</p>
+  {% endif %}
+</article>
+{% endfor %}
+
+<section>
+  <h2>{{ t('project.runs.title') }}</h2>
+  {% if panels %}
+    {% for panel in panels %}
+      {% include "_run_panel.html" %}
+    {% endfor %}
+  {% else %}
+    <p class="muted">{{ t('project.runs.empty') }}</p>
+  {% endif %}
+</section>
+
+{% include "_zone_script.html" %}
+{% endblock %}
