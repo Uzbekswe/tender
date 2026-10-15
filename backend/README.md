@@ -83,7 +83,7 @@ The LLM settings are in `config/models.toml`.
 2. In `config/models.toml`, set `provider = "openrouter"`.
 3. Replace each task's model with a real OpenRouter model ID (the form is `vendor/model-name`). The current values are Claude names, which the handoff uses. They are not OpenRouter IDs. To list vision models, run `uv run python scripts/bakeoff.py --list`.
 4. In your OpenRouter privacy settings, turn on the option that excludes providers which train on your prompts. Only use models that pass this setting. The bids contain personal data.
-5. Set `requests_per_minute` to your account's real limit. The current value (600) is a placeholder for handoff.
+5. Set `requests_per_minute` (default 120) and `parallel_calls` (default 4, or `LLM_CONCURRENCY` in .env) to your account's real limits.
 
 Free tier limits, as far as we know (re-check them, they change): about 20 requests per minute and about 50 per day. With at least $10 of credit, about 1,000 per day. One full test-set run needs about 100 calls, so on the free tier one run can take more than a day.
 
