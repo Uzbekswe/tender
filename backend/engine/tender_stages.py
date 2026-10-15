@@ -31,9 +31,11 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import itertools
 import json
 import logging
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any
@@ -1093,9 +1095,79 @@ PLATFORM_RE = re.compile("|".join(f"(?:{pattern})" for pattern in PLATFORM_PATTE
 KEYWORD_NOTE = "keyword rule: checked on the platform"
 
 
+def _row_text(row: dict) -> str:
+    return " ".join(str(row.get(key) or "") for key in ("parameter", "parameter_ru", "quote"))
+
+
 def _matches_platform_keyword(row: dict) -> bool:
-    text = " ".join(str(row.get(key) or "") for key in ("parameter", "parameter_ru", "quote"))
-    return PLATFORM_RE.search(text) is not None
+    return PLATFORM_RE.search(_row_text(row)) is not None
+
+
+# Rules of the consolidation check, applied in code after the model's answer. They only add suggestions
+# (a human applies them); a requirement the model left out, or one already excluded, is not touched.
+PASS_MARK_RE = re.compile(
+    r"проходн\w* балл|o['ʻ‘’]?tish bal+i\b|minimal\w* bal+\b|pass(?:ing)? (?:mark|score)", re.IGNORECASE,
+)
+MANUFACTURER_FORM_RE = re.compile(
+    r"доверенност\w* производител|авторизационн|manufacturer['’]?s authori[sz]ation|(?<!\w)ishlab chiqaruvchi(?!\w)",
+    re.IGNORECASE,
+)
+SERVICE_WORDS_RE = re.compile(r"услуг|работ|xizmat|(?<!\w)ish(?!\w)|service", re.IGNORECASE)
+GOODS_WORDS_RE = re.compile(r"товар|поставк|mahsulot|tovar|goods", re.IGNORECASE)
+RULE_WHY = {
+    "pass_mark": {
+        "ru": "Проходной балл проверяется как баллы тендера, а не как условие к заявке.",
+        "en": "The pass mark is checked as a tender score, not as a condition of the bid.",
+    },
+    "contradiction": {
+        "ru": "Противоречит {other}; идёт в письмо на разъяснение.",
+        "en": "Contradicts {other}; goes to the clarification letter.",
+    },
+    "services_form": {
+        "ru": "Форма для товара в тендере на услуги.",
+        "en": "A goods-only form in a services tender.",
+    },
+}
+
+
+def _is_services_tender(rows: list[dict]) -> bool:
+    """More goods-scope (T-) requirements name services or works than name goods."""
+    goods_scope = [row for row in rows if str(row["code"]).startswith("T-")]
+    services = sum(1 for row in goods_scope if SERVICE_WORDS_RE.search(_row_text(row)))
+    goods = sum(1 for row in goods_scope if GOODS_WORDS_RE.search(_row_text(row)))
+    return services > goods
+
+
+def _number(text: Any) -> float | None:
+    try:
+        return float(str(text or "").replace(",", ".").replace(" ", ""))
+    except ValueError:
+        return None
+
+
+def _less_strict(a: dict, b: dict) -> dict:
+    """Of two contradicting requirements, the less strict one: for two minimums (>=) the smaller, for two
+    maximums (<=) the larger; otherwise the one on the later page (then the later code)."""
+    if a.get("operator") == b.get("operator"):
+        va, vb = _number(a.get("value")), _number(b.get("value"))
+        if va is not None and vb is not None and va != vb:
+            if a.get("operator") == ">=":
+                return a if va < vb else b
+            if a.get("operator") == "<=":
+                return a if va > vb else b
+    pa, pb = int(a.get("page") or 0), int(b.get("page") or 0)
+    if pa != pb:
+        return a if pa > pb else b
+    return a if a["code"] > b["code"] else b
+
+
+def _suggest_exclusion(suggestion: dict, reason: str, why: str, note: str) -> None:
+    """Turns a kept suggestion into an exclusion, in place. The note keeps what was said before."""
+    suggestion.update({
+        "decision": "exclude", "target": None, "reason_code": reason, "why": why,
+        "type_fix": None, "platform_check": False,
+        "note": note if suggestion["note"] is None else f"{suggestion['note']}; {note}",
+    })
 
 
 def _consolidate_inputs(run_id: int, package_id: int) -> dict[str, Any]:
@@ -1135,6 +1207,19 @@ def _consolidate_inputs(run_id: int, package_id: int) -> dict[str, Any]:
             for r in reqs
         ]
         subject = project.subject if project is not None else None
+        has_pass_threshold = session.exec(
+            select(EvaluationScheme.id).where(
+                EvaluationScheme.checklist_version_id == version_id,
+                EvaluationScheme.pass_threshold.is_not(None),
+            )
+        ).first() is not None
+        # The requirement codes of each contradiction question (its sources); the questions stay as they are.
+        contradictions = [
+            [str(item.get("code")) for item in question.sources if isinstance(item, dict) and item.get("code")]
+            for question in session.exec(
+                select(Question).where(Question.project_id == plan.project_id, Question.kind == "contradiction")
+            ).all()
+        ]
     return {
         "project_id": plan.project_id,
         "package_id": plan.package_id,
@@ -1142,6 +1227,8 @@ def _consolidate_inputs(run_id: int, package_id: int) -> dict[str, Any]:
         "subject": subject or None,
         "requirements": rows,
         "platform_codes": platform_codes,  # not sent to the model: they get no suggestion
+        "has_pass_threshold": has_pass_threshold,  # for the pass-mark rule (not sent to the model)
+        "contradictions": contradictions,  # for the contradiction rule (not sent to the model)
     }
 
 
@@ -1155,7 +1242,8 @@ def _consolidation_of(payload: dict | None) -> ConsolidationOut | None:
 
 
 def _validated_suggestions(
-    items: list[ConsolidationItem], rows: list[dict], platform_codes: frozenset[str] = frozenset(),
+    items: list[ConsolidationItem], rows: list[dict], platform_codes: frozenset[str] = frozenset(), *,
+    report_lang: str = "ru", has_pass_threshold: bool = False, contradictions: Sequence[Sequence[str]] = (),
 ) -> dict[str, dict]:
     """Checks the model's answer in code. Returns one suggestion per analysed code, in code order.
 
@@ -1169,6 +1257,15 @@ def _validated_suggestions(
     - platform_check is true only on keep decisions: when the model says so, or when the keyword
       rule matches the parameter or quote (the note then says so). A code in `platform_codes` is
       already verified on the platform and gets no suggestion at all.
+    Rules in code, after the answer (each adds a suggestion with a "rule" note and a `why` in
+    report_lang; a kept suggestion only):
+    - pass mark: with a pass threshold in the scheme, a requirement that is the pass mark is excluded
+      as TENDER_FACT;
+    - manufacturer's forms: in a services tender (more T- requirements name services or works than
+      goods), a manufacturer's authorisation or undertaking is excluded as POST_AWARD;
+    - contradiction: for each contradiction question between requirements, when both are kept, the less
+      strict one is excluded as CONTRADICTION. The question itself is not changed (it feeds the
+      clarification letter).
     A downgrade is explained in "note". Stored values are plain JSON.
     """
     types = {row["code"]: row["req_type"] for row in rows}
@@ -1218,7 +1315,39 @@ def _validated_suggestions(
             "decision": decision, "target": target, "reason_code": reason,
             "why": why, "type_fix": type_fix, "platform_check": platform, "note": note,
         }
+    _apply_rules(result, by_code, platform_codes, report_lang=report_lang,
+                 has_pass_threshold=has_pass_threshold, contradictions=contradictions)
     return result
+
+
+def _apply_rules(
+    result: dict[str, dict], by_code: dict[str, dict], platform_codes: frozenset[str], *,
+    report_lang: str, has_pass_threshold: bool, contradictions: Sequence[Sequence[str]],
+) -> None:
+    """The deterministic consolidation rules (see _validated_suggestions). Changes `result` in place."""
+    lang = "en" if report_lang == "en" else "ru"
+    services = _is_services_tender(list(by_code.values()))
+    for code, suggestion in result.items():
+        if suggestion["decision"] != "keep":
+            continue  # already excluded or merged: the rules do not change it
+        text_row = by_code[code]
+        if has_pass_threshold and PASS_MARK_RE.search(_row_text(text_row)):
+            _suggest_exclusion(suggestion, "TENDER_FACT", RULE_WHY["pass_mark"][lang], "rule: pass mark of the tender")
+        elif services and MANUFACTURER_FORM_RE.search(_row_text(text_row)):
+            _suggest_exclusion(suggestion, "POST_AWARD", RULE_WHY["services_form"][lang],
+                               "rule: manufacturer's form in a services tender")
+
+    for group in contradictions:
+        for a, b in itertools.combinations(dict.fromkeys(group), 2):
+            if a not in by_code or b not in by_code or a in platform_codes or b in platform_codes:
+                continue
+            if result[a]["decision"] != "keep" or result[b]["decision"] != "keep":
+                continue  # one of them is already excluded or merged
+            loser, other = (a, b) if _less_strict(by_code[a], by_code[b]) is by_code[a] else (b, a)
+            _suggest_exclusion(
+                result[loser], "CONTRADICTION", RULE_WHY["contradiction"][lang].format(other=other),
+                f"rule: contradicts {other}",
+            )
 
 
 async def stage_consolidate(run_id: int, ctx: RunContext) -> None:
@@ -1259,7 +1388,10 @@ async def stage_consolidate(run_id: int, ctx: RunContext) -> None:
         await asyncio.to_thread(_record_metas, run_id, CONSOLIDATE_STAGE, [meta])
         answer = out
 
-    suggestions = _validated_suggestions(answer.items, rows, frozenset(data["platform_codes"]))
+    suggestions = _validated_suggestions(
+        answer.items, rows, frozenset(data["platform_codes"]), report_lang=data["report_lang"],
+        has_pass_threshold=data["has_pass_threshold"], contradictions=data["contradictions"],
+    )
     await asyncio.to_thread(_set_stage_progress, run_id, CONSOLIDATE_STAGE, 1, 1, 0, suggestions=suggestions)
 
 

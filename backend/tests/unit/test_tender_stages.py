@@ -665,3 +665,144 @@ def test_stored_answer_key_changes_with_model_or_prompt_version() -> None:
     assert _digest(variables, "openrouter:m1|extract_requirements@v1") != _digest(variables, "openrouter:m1|extract_requirements@v2")
     assert _digest(variables, "openrouter:m1|extract_requirements@v1") != _digest(variables, "openrouter:m2|extract_requirements@v1")
     assert _digest(variables, "t") == _digest(dict(variables), "t")
+
+
+# ---------- consolidation rules in code: pass mark, goods forms in services, contradictions ----------
+
+def _row(code: str, parameter: str, **extra: Any) -> dict:
+    base = {"code": code, "req_type": "mandatory", "parameter": parameter, "parameter_ru": None,
+            "quote": parameter, "operator": "text", "value": None, "page": 1}
+    return {**base, **extra}
+
+
+def test_the_prompt_for_consolidation_is_v3_with_the_contradiction_reason() -> None:
+    from llm.prompts import load_prompt
+
+    version, system, _ = load_prompt("consolidate")
+    assert version == "consolidate@v3"
+    assert "CONTRADICTION" in system and "POST_AWARD" in system
+
+
+def test_contradiction_is_an_accepted_reason_code() -> None:
+    from engine.tender_stages import _validated_suggestions
+    from llm.schemas import ConsolidationItem
+
+    rows = [_row("U-001", "Срок действия оферты"), _row("U-002", "Срок действия оферты 2")]
+    items = [ConsolidationItem(code="U-002", decision="exclude", reason_code="CONTRADICTION", why="x")]
+    result = _validated_suggestions(items, rows)
+    assert result["U-002"]["decision"] == "exclude" and result["U-002"]["reason_code"] == "CONTRADICTION"
+
+
+def test_pass_mark_is_a_tender_fact_when_the_scheme_has_a_pass_threshold() -> None:
+    from engine.tender_stages import _validated_suggestions
+
+    rows = [
+        _row("T-001", "Минимальный проходной балл 60"),
+        _row("T-002", "Мощность двигателя", quote="Мощность двигателя не менее 2,5 кВт"),
+        _row("T-003", "O'tish balli 60", parameter_ru=None),
+    ]
+    result = _validated_suggestions([], rows, has_pass_threshold=True)
+    assert result["T-001"]["decision"] == "exclude" and result["T-001"]["reason_code"] == "TENDER_FACT"
+    assert result["T-003"]["decision"] == "exclude" and result["T-003"]["reason_code"] == "TENDER_FACT"
+    assert result["T-001"]["platform_check"] is False
+    assert "rule" in result["T-001"]["note"]
+    assert result["T-001"]["why"] == "Проходной балл проверяется как баллы тендера, а не как условие к заявке."
+    assert result["T-002"]["decision"] == "keep"
+    # Without a pass threshold in the scheme the same text is not a tender fact.
+    assert _validated_suggestions([], rows)["T-001"]["decision"] == "keep"
+
+
+def test_pass_mark_pattern_does_not_catch_other_balances() -> None:
+    from engine.tender_stages import _validated_suggestions
+
+    rows = [_row("U-001", "Минимальный остаток на счёте", quote="minimal balance of the deposit account")]
+    assert _validated_suggestions([], rows, has_pass_threshold=True)["U-001"]["decision"] == "keep"
+
+
+def test_manufacturer_form_is_post_award_only_in_a_services_tender() -> None:
+    from engine.tender_stages import _validated_suggestions
+
+    services = [
+        _row("T-001", "Оказание услуг по охране объекта"),
+        _row("T-002", "Услуги уборки помещений"),
+        _row("T-003", "Поставка товара"),
+        _row("U-001", "Доверенность производителя", quote="Доверенность производителя на поставку"),
+    ]
+    result = _validated_suggestions([], services)
+    assert result["U-001"]["decision"] == "exclude" and result["U-001"]["reason_code"] == "POST_AWARD"
+    assert result["U-001"]["why"] == "Форма для товара в тендере на услуги."
+    assert "rule" in result["U-001"]["note"]
+
+    goods = [
+        _row("T-001", "Поставка насоса"),
+        _row("T-002", "Поставка товара"),
+        _row("U-001", "Доверенность производителя", quote="Доверенность производителя на поставку"),
+    ]
+    assert _validated_suggestions([], goods)["U-001"]["decision"] == "keep"
+
+
+def test_contradicting_requirements_exclude_the_less_strict_one() -> None:
+    from engine.tender_stages import _validated_suggestions
+
+    rows = [
+        _row("U-001", "Срок действия оферты", operator=">=", value="90", page=2),
+        _row("U-002", "Срок действия оферты", operator=">=", value="60", page=3),
+        _row("U-003", "Гарантия", page=4),
+    ]
+    result = _validated_suggestions([], rows, contradictions=[["U-001", "U-002"]])
+    # Two minimums: the smaller one is less strict, so it goes to the clarification letter.
+    assert result["U-002"]["decision"] == "exclude" and result["U-002"]["reason_code"] == "CONTRADICTION"
+    assert result["U-002"]["why"] == "Противоречит U-001; идёт в письмо на разъяснение."
+    assert result["U-001"]["decision"] == "keep" and result["U-003"]["decision"] == "keep"
+
+
+@pytest.mark.parametrize("rows, loser, lang, why_template", [
+    pytest.param(
+        [_row("U-001", "Макс. срок", operator="<=", value="30", page=2),
+         _row("U-002", "Макс. срок", operator="<=", value="45", page=3)],
+        "U-002", "ru", "Противоречит {other}; идёт в письмо на разъяснение.",
+        id="two-maximums-larger-is-less-strict"),
+    pytest.param(
+        [_row("U-001", "Срок оферты", page=2), _row("U-002", "Срок оферты, иначе", page=5)],
+        "U-002", "en", "Contradicts {other}; goes to the clarification letter.",
+        id="otherwise-the-later-page-en"),
+])
+def test_contradiction_rule_choice_and_language(rows, loser, lang, why_template) -> None:
+    from engine.tender_stages import _validated_suggestions
+
+    other = "U-001" if loser == "U-002" else "U-002"
+    result = _validated_suggestions([], rows, report_lang=lang, contradictions=[["U-001", "U-002"]])
+    assert result[loser]["decision"] == "exclude" and result[loser]["reason_code"] == "CONTRADICTION"
+    assert result[loser]["why"] == why_template.format(other=other)
+    assert result[other]["decision"] == "keep"
+
+
+def test_contradiction_rule_skips_a_pair_that_is_already_decided_or_on_the_platform() -> None:
+    from engine.tender_stages import _validated_suggestions
+    from llm.schemas import ConsolidationItem
+
+    rows = [_row("U-001", "Срок", operator=">=", value="90", page=2),
+            _row("U-002", "Срок", operator=">=", value="60", page=3)]
+    # The model already excluded the less strict one: the rule leaves the answer as it is.
+    items = [ConsolidationItem(code="U-002", decision="exclude", reason_code="TENDER_FACT", why="факт")]
+    result = _validated_suggestions(items, rows, contradictions=[["U-001", "U-002"]])
+    assert result["U-002"]["reason_code"] == "TENDER_FACT"
+    # A platform check has no suggestion, so the pair is not touched either.
+    result = _validated_suggestions([], rows, frozenset({"U-002"}), contradictions=[["U-001", "U-002"]])
+    assert "U-002" not in result and result["U-001"]["decision"] == "keep"
+
+
+def test_consolidation_reads_the_contradiction_questions_and_leaves_them(data_dir: Path, llm: FakeLLM) -> None:
+    from engine.tender_stages import _consolidate_inputs
+
+    package_id, _ = _add_tender(_pdf_bytes(TENDER_PAGES))
+    _standard_drafts(llm)
+    run_id = _new_run(package_id)
+    _run(run_id)
+
+    codes = {r.source_quote: r.code for r in _requirements(_run_row(run_id).checklist_version_id)}
+    data = _consolidate_inputs(run_id, package_id)
+    assert data["has_pass_threshold"] is True  # SCHEME has a pass threshold of 4
+    assert [sorted(group) for group in data["contradictions"]] == [sorted([codes[R2.quote], codes[R4.quote]])]
+    # The question feeds the clarification letter: consolidation never removes it.
+    assert any(q.kind == "contradiction" for q in _questions(package_id))

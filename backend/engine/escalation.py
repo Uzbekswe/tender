@@ -4,11 +4,13 @@
   without a card, is re-asked once on the next tier.
 - extract (engine.tender_stages): a window whose requirement quotes fail verification too often
   is re-asked once on the next tier; the answer with more verified requirements is kept.
-- match (engine.bid_stages): a mandatory requirement with conflict or doubt is re-asked alone once
-  with task "match_hard" (tier hard).
+- match (engine.bid_stages): a mandatory requirement that is still unclear after the first answer
+  (see bid_stages._hard_rules) is re-asked alone once with task "match_hard" (tier hard).
 
 Every escalation is written to Run.progress["llm"]["escalations"] as
 {stage, unit, from_tier, to_tier, reason}; an entry for the same (stage, unit) is written only once.
+The reason names the rule that fired. Counters of decisions taken in code (for example
+"escalation_skipped", "ignored_needs_expert") are kept beside them in Run.progress["llm"].
 
 ProviderUnavailable (the CLI is missing or not logged in) is never escalated and never swallowed:
 stages re-raise it, so the run fails with its message.
@@ -30,6 +32,7 @@ __all__ = [
     "escalation_tiers",
     "raise_first_error",
     "record_escalations",
+    "record_llm_counts",
 ]
 
 
@@ -78,6 +81,18 @@ def record_escalations(run_id: int, entries: Iterable[dict[str, Any]]) -> None:
                 "reason": entry.get("reason", ""),
             })
         llm["escalations"] = logged
+        run.progress = {**run.progress, "llm": llm}  # reassigned: SQLAlchemy sees the change
+        session.add(run)
+
+
+def record_llm_counts(run_id: int, counts: dict[str, int]) -> None:
+    """Set counters in Run.progress["llm"] (replaced, not added to: a stage's counts are per run)."""
+    with _rmw_lock, session_scope() as session:
+        run = session.get(Run, run_id)
+        if run is None:
+            return
+        llm = dict(run.progress.get("llm") or {})
+        llm.update({name: int(value) for name, value in counts.items()})
         run.progress = {**run.progress, "llm": llm}  # reassigned: SQLAlchemy sees the change
         session.add(run)
 
