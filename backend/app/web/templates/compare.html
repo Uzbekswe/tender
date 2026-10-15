@@ -1,8 +1,23 @@
 {% extends "base.html" %}
 {% block title %}{{ t('compare.title') }} · {{ project_name }}{% endblock %}
 {% block content %}
+{% if customer %}
+<p><a href="/projects/{{ project_id }}/comparison">{{ t('comparison.back') }}</a></p>
+{% else %}
 <p><a href="/projects/{{ project_id }}">{{ t('compare.back') }}</a></p>
+{% endif %}
 <h1>{{ project_name }}</h1>
+{% if switcher %}
+<nav class="run-nav switcher" aria-label="{{ t('switcher.label') }}">
+  {% for s in switcher %}
+    {% if s.href %}
+      <a href="{{ s.href }}" class="{{ 'active' if s.active }}"{% if s.active %} aria-current="true"{% endif %}>{{ s.name }}</a>
+    {% else %}
+      <span>{{ s.name }}</span>
+    {% endif %}
+  {% endfor %}
+</nav>
+{% endif %}
 {% include "_run_nav.html" %}
 
 {% if top.scored %}
@@ -42,6 +57,33 @@
       {% endif %}
     </section>
   </div>
+  {% if customer and decision %}
+  <section class="card decision" id="decision" aria-labelledby="decision-h">
+    <h2 id="decision-h">{{ t('decision.title') }}: {{ decision.name }}</h2>
+    {% if decision_state == 'saved' %}<div class="alert alert-ok" role="status">{{ t('decision.saved') }}</div>{% endif %}
+    {% if decision_state == 'invalid' %}<div class="alert alert-error" role="alert">{{ t('error.form') }}</div>{% endif %}
+    <p class="muted small">{{ t('decision.hint') }}</p>
+    {% if decision.history %}
+      <ul class="history-changes">
+        {% for h in decision.history %}
+          <li><strong>{{ h.member }}</strong> <span class="muted small">{{ h.at }}</span><br>{{ h.text }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted small">{{ t('decision.empty') }}</p>
+    {% endif %}
+    <form method="post" action="{{ decision.action }}" class="decision-form">
+      <input type="hidden" name="next" value="{{ decision.next }}">
+      <label>{{ t('decision.member') }}
+        <input type="text" name="member_name" required maxlength="200">
+      </label>
+      <label>{{ t('decision.text') }}
+        <textarea name="text" required maxlength="4000" rows="3"></textarea>
+      </label>
+      <div><button type="submit" class="btn primary small">{{ t('decision.submit') }}</button></div>
+    </form>
+  </section>
+  {% endif %}
 {% else %}
   <div class="alert alert-warn" role="status">{{ t('compare.not_scored') }}</div>
 {% endif %}
