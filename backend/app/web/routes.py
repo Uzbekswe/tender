@@ -275,6 +275,15 @@ def _misplaced_files(session: Session, package: Package) -> list[str]:
     return out
 
 
+def _busy(session: Session, packages: list[Package]) -> set[int]:
+    """Packages with a run queued or running: their start button is disabled until it finishes."""
+    ids = [p.id for p in packages]
+    if not ids:
+        return set()
+    return set(session.exec(select(Run.package_id).where(
+        col(Run.package_id).in_(ids), col(Run.status).in_([RunStatus.queued, RunStatus.running]))).all())
+
+
 def _unchecked(session: Session, packages: list[Package]) -> set[int]:
     """Packages with no run yet: their files can still be removed."""
     ids = [p.id for p in packages]
@@ -542,6 +551,7 @@ def _project_view(
         bid_docs=_documents(session, bid.id),
         wrong_box=_wrong_box(session, [tender, bid]),
         removable=_unchecked(session, [tender, bid]),
+        busy=_busy(session, [tender, bid]),
         confirm_package=confirm_package,
         doc_types=DOC_TYPES,
         approved=_has_approved_checklist(session, project.id),
@@ -663,7 +673,9 @@ def start_run_page(
         start_run(package_id=package.id, body=RunCreate(), session=session)
     except HTTPException as exc:
         session.rollback()
-        return _project_view(request, session, project, status_code=409, error=_error_text(_tr(request), exc))
+        text = (_tr(request)("run.already_running") if "already queued or running" in str(exc.detail)
+                else _error_text(_tr(request), exc))
+        return _project_view(request, session, project, status_code=409, error=text)
     return _redirect(f"/projects/{project_id}")
 
 
