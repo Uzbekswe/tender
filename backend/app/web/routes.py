@@ -439,7 +439,7 @@ def _projects_view(
         rows=rows,
         error=error,
         side=side,
-        values=values or {"report_lang": "ru"},
+        values=values or {"report_lang": _tr(request).lang},  # the report follows the screen language by default
         active=side,
     )
 
@@ -845,6 +845,12 @@ def checklist_page(
 @router.post("/projects/{project_id}/checklist/approve")
 def approve_page(project_id: int, request: Request, session: Session = Depends(get_session)) -> Response:
     project = _project_or_404(session, project_id)
+    try:
+        # Suggestions still pending (duplicates, tender facts, platform items) are applied first: a
+        # checklist approved with them checks the bid against non-requirements and duplicates.
+        apply_suggestions(project_id=project.id, body=None, session=session)
+    except HTTPException:
+        session.rollback()  # e.g. nothing to apply; approval below reports any real problem
     try:
         version = approve_checklist(project_id=project.id, session=session)
     except HTTPException as exc:

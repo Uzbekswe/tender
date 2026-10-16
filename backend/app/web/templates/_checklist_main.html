@@ -21,7 +21,7 @@
     {% else %}
       <span class="badge badge-draft">{{ t('checklist.version.draft', n=version.number) }}</span>
       <form method="post" action="/projects/{{ pid }}/checklist/approve" class="inline-form">
-        <button type="submit" class="btn primary">{{ t('checklist.approve') }}</button>
+        <button type="submit" class="btn primary">{% if sug_total %}{{ t('checklist.approve_with_suggestions', n=sug_total) }}{% else %}{{ t('checklist.approve') }}{% endif %}</button>
       </form>
       <form method="post" action="/projects/{{ pid }}/checklist/apply-suggestions" class="inline-form"
             hx-post="/projects/{{ pid }}/checklist/apply-suggestions"
