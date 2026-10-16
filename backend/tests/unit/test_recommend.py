@@ -268,3 +268,11 @@ def test_clarification_letter_in_uzbek() -> None:
     assert "   Iqtibos (fayl tender.pdf, b. 28): «Maximum score 15»" in body
     assert "Request for clarification" not in body and "Запрос" not in body
     assert body.endswith("\n")
+
+
+def test_a_failed_text_condition_is_correctable_data_not_a_lost_cause():
+    # e.g. the registration date differs between the bidder's form and the registry extract
+    req = _req(scope="bidder", operator="text", value=None, unit=None)
+    rec = recommend(req, "does_not_meet", ["VALUE_FAIL"], _evidence(), "ru")
+    assert rec.action_type == CORRECT_DATA
+    assert "нельзя выполнить" not in rec.action

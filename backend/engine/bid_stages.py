@@ -866,7 +866,7 @@ def _verify_item(ev: EvidenceOut, bid: _Bid, req: _Req) -> _Found | None:
     if not result.verified or result.page is None:
         return None
     row = pages[result.page]
-    declaration = verdict.is_declaration(req.evidence_doc_types, req.confirmation_method)
+    declaration = verdict.is_declaration(req.evidence_doc_types, req.confirmation_method, str(req.scope))
     return _Found(
         ev=ev,
         row=row,
@@ -941,7 +941,7 @@ IGNORED_EXPERT_NOTE = "The model asked for an expert, but this is not an equival
 def _assess_one(final: _Final, plan: _Plan) -> _Checked:
     bid, req = plan.bid, final.req
     deadline = bid.deadline.date() if bid.deadline else None
-    declaration = verdict.is_declaration(req.evidence_doc_types, req.confirmation_method)
+    declaration = verdict.is_declaration(req.evidence_doc_types, req.confirmation_method, str(req.scope))
     reasons: set[str] = set()
 
     ans = final.answer

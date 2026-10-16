@@ -317,8 +317,8 @@
   "platform.state.confirmed": "Platformada tasdiqlangan",
   "platform.state.pending": "Tasdiqlanmagan",
   "summary.title": "Xulosa",
-  "summary.headline": "{verdict}: {overall}%, {points} / {stated} ball (oʻtish bali {pass_mark}), jiddiy muammolar: {critical}.",
-  "summary.headline_no_points": "{verdict}: {overall}%, jiddiy muammolar: {critical}.",
+  "summary.headline": "{verdict}. Tuzatish kerak boʻlgan majburiy bandlar: {critical}. Muvofiqlik {overall}%. Tender ballari {points} / {stated} (oʻtish bali {pass_mark}).",
+  "summary.headline_no_points": "{verdict}. Tuzatish kerak boʻlgan majburiy bandlar: {critical}. Muvofiqlik {overall}%.",
   "summary.headline.platform.one": "{n} ta band platformada tekshiriladi.",
   "summary.headline.platform.few": "{n} ta band platformada tekshiriladi.",
   "summary.headline.platform.many": "{n} ta band platformada tekshiriladi.",
@@ -494,5 +494,6 @@
   "box.hint.tender": "Bu fayl buyurtmachi hujjatiga emas, taklifga oʻxshaydi: {files}.",
   "box.hint.bid": "Bu fayl taklifga emas, tender hujjatlariga oʻxshaydi: {files}.",
   "box.run_anyway": "Baribir ishga tushirish",
-  "project.docs.remove": "Faylni oʻchirish"
+  "project.docs.remove": "Faylni oʻchirish",
+  "checklist.approve_with_suggestions": "Takliflarni ({n}) qoʻllash va tasdiqlash"
 }

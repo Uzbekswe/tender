@@ -75,16 +75,25 @@ METHOD_FACTOR_UNSURE = 0.5       # LLM said cannot_judge, or needs_expert
 NO_VERIFIED_CAP = 50.0
 
 
-def is_declaration(evidence_doc_types: Iterable[str] | None, confirmation_method: str | None) -> bool:
-    """True when the tender asks for the bidder's own statement, not a document that proves a fact.
+def is_declaration(evidence_doc_types: Iterable[str] | None, confirmation_method: str | None,
+                   scope: str | None = None) -> bool:
+    """True when the bidder's own statement is enough, not a document that proves a fact.
 
-    That is the case when every evidence doc type is a CLAIM type, or when the confirmation method
-    names a form, letter or declaration. Any other requirement is documentary.
+    `confirmation_method` is what the tender itself says about confirmation; `evidence_doc_types` is
+    only the extraction model's guess of documents that could help. So:
+    - the tender names a form, letter or declaration → a statement;
+    - the tender names no confirming document and the item is about the offer itself (scope goods:
+      terms, deadlines, payment, what will be done) → the bidder's commitment in the bid is the
+      evidence; the model's guess (e.g. "contract" for payment terms) does not make it documentary;
+    - every guessed type is a claim type → a statement;
+    - otherwise (bidder qualification, or a document the tender names) → documentary.
     """
-    types = [t for t in (evidence_doc_types or ()) if t]
-    if types and all(t in CLAIM_DOC_TYPES for t in types):
+    if confirmation_method and _DECLARATION_WORDS.search(confirmation_method) is not None:
         return True
-    return bool(confirmation_method) and _DECLARATION_WORDS.search(confirmation_method) is not None
+    if not (confirmation_method or "").strip() and scope == "goods":
+        return True
+    types = [t for t in (evidence_doc_types or ()) if t]
+    return bool(types) and all(t in CLAIM_DOC_TYPES for t in types)
 
 
 def is_proof_item(doc_type: str | None, *, declaration: bool) -> bool:

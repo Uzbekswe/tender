@@ -658,16 +658,14 @@ def test_summary_shows_sections_plan_collect_and_downloads(client: TestClient) -
     _lang(client, "ru")
     ru = client.get(f"/runs/{run}/summary")
     assert ru.status_code == 200
-    for heading in (
-        "Критичные несоответствия",
-        "Снижают балл",
-        "Риски",
-        "Сильные стороны",
-        "План действий по влиянию",
-        "Что ещё нужно собрать",
-    ):
+    for heading in ("Критичные несоответствия", "Снижают балл", "Риски"):
         assert heading in ru.text, heading
-    assert "Риск отклонения: 50.0%, 2–12 из 15 баллов (проходной 11), критичных проблем: 1" in ru.text
+    # Each problem is listed once: no separate action-plan table or collect list repeating it.
+    assert "План действий по влиянию" not in ru.text
+    assert "Что ещё нужно собрать" not in ru.text
+    assert "Влияние на результат" not in ru.text
+    assert ("Риск отклонения. Обязательных пунктов исправить: 1. Соответствие 50.0%. "
+            "Баллы тендера 2–12 из 15 (проходной 11).") in ru.text
     assert f"req={ids['T-001']}" in ru.text
     assert f"/api/v1/runs/{run}/export/xlsx" in ru.text
     assert f"/api/v1/projects/{ids['project']}/export/clarification.txt" in ru.text
@@ -675,7 +673,7 @@ def test_summary_shows_sections_plan_collect_and_downloads(client: TestClient) -
 
     _lang(client, "en")
     en = client.get(f"/runs/{run}/summary").text
-    assert "Rejection risk: 50.0%, 2–12 of 15 points (pass mark 11), 1 critical issues" in en
+    assert "Rejection risk. Mandatory items to fix: 1. Compliance 50.0%. Tender points 2–12 of 15 (pass mark 11)." in en
     assert "Critical non-compliances" in en
     assert "Download XLSX" in en
 
@@ -853,7 +851,8 @@ def test_apply_all_without_htmx_redirects_and_keeps_the_filter(client: TestClien
 
 def test_approved_version_shows_suggestions_read_only(client: TestClient, suggested: dict[str, Any]) -> None:
     project_id = suggested["project"]
-    client.post(f"/projects/{project_id}/checklist/approve", follow_redirects=False)
+    # Approved through the API, which (unlike the screen) does not apply suggestions on approval.
+    assert client.post(f"/api/v1/projects/{project_id}/checklist/approve").status_code == 200
     _lang(client, "ru")
     text = client.get(f"/projects/{project_id}/checklist").text
     assert "Предлагается: исключить — факт о тендере" in text  # still visible
@@ -1038,7 +1037,7 @@ def test_summary_lists_platform_items_before_the_plan_with_the_conclusion(
     assert "1 item is checked on the platform." in text
     assert "Check on the platform before submission" in text
     assert "☐" in text  # not confirmed yet
-    assert text.index("Check on the platform before submission") < text.index("Action plan by impact")
+    assert "Action plan by impact" not in text  # the plan table is gone; each item is listed once
 
     client.post(f"/runs/{run}/compare/platform/{platform_bid['P-001']}/confirm", headers={"HX-Request": "true"})
     done = client.get(f"/runs/{run}/summary").text
@@ -1367,3 +1366,13 @@ def test_project_page_shows_only_the_latest_check_per_package(client: TestClient
     _lang(client, "en")
     text = client.get(f"/projects/{seeded['project']}").text
     assert text.count('class="card run"') == 2  # the tender analysis and the newest bid check
+
+
+def test_approve_on_the_screen_applies_pending_suggestions_first(client: TestClient, suggested: dict[str, Any]) -> None:
+    project_id = suggested["project"]
+    _lang(client, "en")
+    page = client.get(f"/projects/{project_id}/checklist").text
+    assert "suggestions and approve" in page
+    client.post(f"/projects/{project_id}/checklist/approve", follow_redirects=False)
+    assert _version_status(suggested["version"]) == "approved"
+    assert _req_state(suggested["version"], "T-001").excluded is True  # the "tender fact" suggestion was applied

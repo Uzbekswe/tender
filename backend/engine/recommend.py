@@ -475,7 +475,10 @@ def _route(req: ReqView, status: str, reasons: Sequence[str]) -> tuple[str, str]
     if key == VALUE_FAIL:
         if goods:
             return "VALUE_FAIL_GOODS", REPLACE_GOODS
-        if CONTRADICTION in reasons:
+        # A text condition failed by the model's reading (no number compared) is usually data that
+        # differs between the bid's own documents, e.g. a date in a form vs the registry extract:
+        # the bidder can correct it. Only a measured value below the requirement is not fixable.
+        if CONTRADICTION in reasons or req.operator == "text":
             return "VALUE_FAIL_CONFLICT", CORRECT_DATA
         return "VALUE_FAIL_BIDDER", NOT_FIXABLE
     if key == CONTRADICTION:
