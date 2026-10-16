@@ -10,7 +10,7 @@ from typing import BinaryIO, TypeVar
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
-from sqlmodel import Session, SQLModel, select
+from sqlmodel import Session, SQLModel, col, select
 
 from app.db import get_session
 from app.models import (
@@ -23,6 +23,7 @@ from app.models import (
     Project,
     Run,
     RunKind,
+    RunStatus,
 )
 from app.runner import runner
 from app.schemas import (
@@ -253,6 +254,14 @@ def start_run(
     else:
         kind = RunKind.bid
         checklist_id = _resolve_checklist(session, package.project_id, body.checklist_version_id)
+
+    # One check at a time per package: a second click must not queue a duplicate run.
+    active = session.exec(
+        select(Run.id).where(Run.package_id == package.id,
+                             col(Run.status).in_([RunStatus.queued, RunStatus.running])).limit(1)
+    ).first()
+    if active is not None:
+        raise HTTPException(status_code=409, detail=f"run {active} of this package is already queued or running")
 
     if body.parent_run_id is not None:
         parent = session.get(Run, body.parent_run_id)

@@ -362,7 +362,8 @@ def test_check_all_skips_a_bidder_already_in_progress_and_reruns_on_a_new_versio
     assert again["runs"] == []
     assert again["skipped"][0]["reason"] == "a check of this bidder is already running"
 
-    with session_scope() as s:  # a later approved checklist version re-runs every bidder
+    with session_scope() as s:  # once that check is finished, a later approved version re-runs every bidder
+        s.get(Run, first["runs"][0]["run_id"]).status = RunStatus.done
         s.add(ChecklistVersion(project_id=ids["project"], number=2, status="approved", approved_at=utcnow()))
     later = client.post(url).json()
     assert later["checklist_version_number"] == 2

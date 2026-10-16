@@ -495,5 +495,6 @@
   "box.hint.bid": "This file looks like tender documents, not a bid: {files}.",
   "box.run_anyway": "Run anyway",
   "project.docs.remove": "Remove file",
-  "checklist.approve_with_suggestions": "Apply {n} suggestions and approve"
+  "checklist.approve_with_suggestions": "Apply {n} suggestions and approve",
+  "run.already_running": "A check is already running. Wait for it to finish; the page updates by itself."
 }
