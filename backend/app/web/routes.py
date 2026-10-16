@@ -329,16 +329,48 @@ def _latest_approved_number(session: Session, project_id: int) -> int | None:
 
 
 def _panel(run: Any, tr: Translator, project_id: int, approved_version: int | None = None,
-           *, customer: bool = False) -> dict[str, Any]:
+           *, customer: bool = False, snapshot: Any = None, label: str | None = None) -> dict[str, Any]:
+    """A run as the project page shows it. The stage table is shown only while the run is working;
+    a finished run is one line (status, time, verdict and score) plus a warning when some items
+    were left unprocessed."""
+    active = run.status in ACTIVE_RUN_STATUSES
+    rows = _progress_rows(run, tr)
+    unfinished = 0 if active else sum(r["pending"] or 0 for r in rows)
     return {
         "run": run,
-        "rows": _progress_rows(run, tr),
-        "active": run.status in ACTIVE_RUN_STATUSES,
+        "rows": [r for r in rows if r["total"]] if active else [],
+        "active": active,
+        "label": label,  # which bid, when a project holds more than one
+        "unfinished": unfinished,
+        "finished_text": _deadline_text(run.finished_at) if not active else None,
+        "verdict": str(snapshot.verdict) if snapshot is not None else None,
+        "score": round(snapshot.overall) if snapshot is not None else None,
         "project_id": project_id,
         "customer": customer,
         # The tender run waits for approval until its checklist is approved; then it shows that instead.
         "approved_version": approved_version if run.kind == RunKind.tender else None,
     }
+
+
+def _latest_runs(runs: list[Any]) -> list[Any]:
+    """The newest run per package and kind; older runs are in the history, not on the project page."""
+    seen: set[tuple[int, str]] = set()
+    out = []
+    for run in runs:
+        key = (run.package_id, str(run.kind))
+        if key not in seen:
+            seen.add(key)
+            out.append(run)
+    return out
+
+
+def _snapshots(session: Session, runs: list[Any]) -> dict[int, Any]:
+    ids = [r.id for r in runs]
+    if not ids:
+        return {}
+    rows = session.exec(select(ScoreSnapshot).where(col(ScoreSnapshot.run_id).in_(ids))
+                        .order_by(col(ScoreSnapshot.id))).all()
+    return {row.run_id: row for row in rows}  # the newest snapshot per run wins
 
 
 def _one_requirement(session: Session, row: Requirement) -> Any:
@@ -461,8 +493,14 @@ def _project_view(
         .join(Package, Run.package_id == Package.id)
         .where(Package.project_id == project.id)
         .order_by(col(Run.id).desc())
-        .limit(8)
+        .limit(50)
     ).all()
+    runs = _latest_runs(list(runs))
+    snaps = _snapshots(session, runs)
+    bid_pkgs = session.exec(
+        select(Package).where(Package.project_id == project.id, Package.role == PackageRole.bid)
+    ).all()
+    labels = {p.id: p.label for p in bid_pkgs} if len(bid_pkgs) > 1 else {}
     approved_version = _latest_approved_number(session, project.id)
     return _render(
         request,
@@ -475,7 +513,8 @@ def _project_view(
         bid_docs=_documents(session, bid.id),
         doc_types=DOC_TYPES,
         approved=_has_approved_checklist(session, project.id),
-        panels=[_panel(run, tr, project.id, approved_version) for run in runs],
+        panels=[_panel(run, tr, project.id, approved_version, snapshot=snaps.get(run.id),
+                       label=labels.get(run.package_id)) for run in runs],
         deadline=_deadline_status(project.submission_deadline),
         deadline_text=_deadline_text(project.submission_deadline),
         deadline_input=_dt_input(project.submission_deadline),
@@ -1986,7 +2025,8 @@ def _bidder_cards(session: Session, tr: Any, project: Project) -> list[dict[str,
             "name": pkg.bidder_name or pkg.label,
             "stir": pkg.bidder_stir,
             "docs": _documents(session, pkg.id),
-            "panel": _panel(runs[0], tr, project.id, customer=True) if runs else None,
+            "panel": (_panel(runs[0], tr, project.id, customer=True, snapshot=_snapshots(session, [runs[0]]).get(runs[0].id))
+                      if runs else None),
             "removable": not runs,
         })
     return cards
@@ -2000,7 +2040,7 @@ def _customer_project_view(
     tender, _ = _ensure_packages(session, project)
     approved_number = _latest_approved_number(session, project.id)
     tender_runs = session.exec(
-        select(Run).where(Run.package_id == tender.id).order_by(col(Run.id).desc()).limit(8)
+        select(Run).where(Run.package_id == tender.id).order_by(col(Run.id).desc()).limit(1)
     ).all()
     return _render(
         request,

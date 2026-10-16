@@ -3,13 +3,18 @@
      {% if panel.active %}hx-get="/projects/{{ panel.project_id }}/runs/{{ panel.run.id }}/progress" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
   {% set checklist_approved = panel.approved_version and panel.run.status == 'waiting_approval' %}
   <div class="run-head">
-    <strong>{{ t('run.kind.' ~ panel.run.kind) }}</strong>
+    <strong>{{ t('run.kind.' ~ panel.run.kind) }}{% if panel.label %} · {{ panel.label }}{% endif %}</strong>
     {% if checklist_approved %}
     <span class="badge badge-run-done">{{ t('run.status.done') }}</span>
     {% else %}
     <span class="badge badge-run-{{ panel.run.status }}">{{ t('run.status.' ~ panel.run.status) }}</span>
     {% endif %}
-    {% if panel.run.stage %}<span class="muted small">{{ t('stage.' ~ panel.run.stage) }}</span>{% endif %}
+    {% if panel.active and panel.run.stage %}<span class="muted small">{{ t('stage.' ~ panel.run.stage) }}</span>{% endif %}
+    {% if panel.verdict %}
+      <span class="badge badge-verdict-{{ panel.verdict }}">{{ t(('committee.verdict.' if panel.customer else 'verdict.') ~ panel.verdict) }}</span>
+      {% if panel.score is not none %}<strong>{{ panel.score }}%</strong>{% endif %}
+    {% endif %}
+    {% if panel.finished_text %}<span class="muted small">{{ panel.finished_text }}</span>{% endif %}
   </div>
   {% if panel.rows %}
   <div class="table-wrap">
@@ -32,7 +37,7 @@
   </table>
   </div>
   {% endif %}
-  <p class="small">{{ t('run.warnings', count=panel.run.warnings|length) }}</p>
+  {% if panel.unfinished %}<p class="small warn-line">{{ t('run.unfinished', count=panel.unfinished) }}</p>{% endif %}
   {% if panel.run.error %}<p class="error small">{{ t('run.error') }}: {{ panel.run.error }}</p>{% endif %}
   {% if checklist_approved %}
     <p><a href="/projects/{{ panel.project_id }}/checklist">{{ t('run.checklist_approved', n=panel.approved_version) }}</a></p>
