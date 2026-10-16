@@ -495,5 +495,6 @@
   "box.hint.bid": "Этот файл похож на тендерную документацию, а не на заявку: {files}.",
   "box.run_anyway": "Всё равно запустить",
   "project.docs.remove": "Удалить файл",
-  "checklist.approve_with_suggestions": "Применить предложения ({n}) и утвердить"
+  "checklist.approve_with_suggestions": "Применить предложения ({n}) и утвердить",
+  "run.already_running": "Проверка уже идёт — дождитесь её окончания, страница обновится сама."
 }

@@ -495,5 +495,6 @@
   "box.hint.bid": "Bu fayl taklifga emas, tender hujjatlariga oʻxshaydi: {files}.",
   "box.run_anyway": "Baribir ishga tushirish",
   "project.docs.remove": "Faylni oʻchirish",
-  "checklist.approve_with_suggestions": "Takliflarni ({n}) qoʻllash va tasdiqlash"
+  "checklist.approve_with_suggestions": "Takliflarni ({n}) qoʻllash va tasdiqlash",
+  "run.already_running": "Tekshiruv allaqachon ketmoqda. Tugashini kuting, sahifa oʻzi yangilanadi."
 }
