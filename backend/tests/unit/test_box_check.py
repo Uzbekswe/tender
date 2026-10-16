@@ -109,3 +109,17 @@ def test_remove_file_is_refused_after_the_box_was_checked(client: TestClient) ->
     assert resp.status_code == 409
     with session_scope() as s:
         assert s.get(Document, ids["doc"]) is not None
+
+
+def test_a_second_click_does_not_queue_a_duplicate_run(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    queued: list[int] = []
+    monkeypatch.setattr(projects_api.runner, "enqueue", lambda run_id: queued.append(run_id))
+    ids = _project(with_bid_in_tender_box=False)
+    _lang(client, "en")
+    url = f"/projects/{ids['project']}/packages/{ids['tender']}/runs"
+    assert client.post(url, follow_redirects=False).status_code == 303
+    second = client.post(url, follow_redirects=False)
+    assert second.status_code == 409
+    assert "already running" in second.text
+    assert len(queued) == 1
+    assert "disabled" in client.get(f"/projects/{ids['project']}").text

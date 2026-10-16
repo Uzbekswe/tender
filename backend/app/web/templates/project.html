@@ -47,14 +47,15 @@
   <h2>{{ t('project.actions.title') }}</h2>
   <div class="actions">
     <form method="post" action="/projects/{{ project.id }}/packages/{{ tender.id }}/runs" class="inline-form">
-      <button type="submit" class="btn primary">{{ t('project.actions.analyse') }}</button>
+      <button type="submit" class="btn primary" {% if busy and tender.id in busy %}disabled aria-disabled="true"{% endif %}>{{ t('project.actions.analyse') }}</button>
     </form>
     <form method="post" action="/projects/{{ project.id }}/packages/{{ bid.id }}/runs" class="inline-form">
-      <button type="submit" class="btn primary" {% if not approved %}disabled aria-disabled="true"{% endif %}>{{ t('project.actions.check_bid') }}</button>
+      <button type="submit" class="btn primary" {% if not approved or (busy and bid.id in busy) %}disabled aria-disabled="true"{% endif %}>{{ t('project.actions.check_bid') }}</button>
     </form>
     <a class="btn" href="/projects/{{ project.id }}/checklist">{{ t('project.actions.open_checklist') }}</a>
   </div>
   {% if not approved %}<p class="muted">{{ t('project.actions.check_bid_locked') }}</p>{% endif %}
+  {% if busy %}<p class="muted">{{ t('run.already_running') }}</p>{% endif %}
 </section>
 
 <section>
