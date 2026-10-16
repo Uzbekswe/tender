@@ -51,3 +51,7 @@ Thumbs.db
 
 # Local assistant/tool settings (machine-specific)
 .claude/
+
+# Private project documents (research, spec, decisions): kept locally, never published
+docs/
+lucius-supplier-side-research.md

@@ -16,7 +16,7 @@ Tender-Sverka checks a supplier's bid against the requirements of a public tende
 - **Numbers, dates and scores are computed by code.** The LLM reads and judges text. It never sets a status, a score or a date comparison.
 - **Low confidence means "Needs human review".** The app does not guess.
 
-Design details: [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
+Overview, install and usage: [../README.md](../README.md).
 
 ## Setup
 
