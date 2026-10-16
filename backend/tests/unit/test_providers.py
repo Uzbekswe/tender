@@ -230,7 +230,7 @@ async def test_exit_without_result_line_is_classified_by_stderr():
         await crash.complete(make_request([ChatMessage("user", "x")]))
 
     silent = cli.ClaudeCliProvider("claude", runner=FakeRunner(returncode=0))
-    with pytest.raises(LLMError, match="no result line"):
+    with pytest.raises(TransientProviderError, match="no result line"):  # retried by the service
         await silent.complete(make_request([ChatMessage("user", "x")]))
 
 
