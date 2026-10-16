@@ -488,5 +488,11 @@
   "decision.text": "Decision and comment",
   "decision.submit": "Record decision",
   "decision.saved": "Decision recorded in the log.",
-  "run.unfinished": "{count} items were not processed; they are shown as Needs review."
+  "run.unfinished": "{count} items were not processed; they are shown as Needs review.",
+  "box.wrong.tender": "The customer documents seem to contain a bid: {files}. A checklist made from a bid is wrong. Move the file to the Bid box, or run anyway.",
+  "box.wrong.bid": "The bid seems to contain tender documents instead: {files}. Check the files, or run anyway.",
+  "box.hint.tender": "This file looks like a bid, not the customer's tender documents: {files}.",
+  "box.hint.bid": "This file looks like tender documents, not a bid: {files}.",
+  "box.run_anyway": "Run anyway",
+  "project.docs.remove": "Remove file"
 }
