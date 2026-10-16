@@ -13,6 +13,12 @@
       <p class="zone-msg" role="status"></p>
     </form>
 
+    {% set misplaced_names = (wrong_box or {}).get(zone.package.id) %}
+    {% if misplaced_names %}
+      <div class="alert alert-warn" role="alert">
+        {{ t('box.hint.tender' if zone.package.role == 'tender' else 'box.hint.bid', files=misplaced_names|join(', ')) }}
+      </div>
+    {% endif %}
     {% if zone.docs %}
     <div class="table-wrap">
     <table class="data docs">
@@ -30,6 +36,11 @@
             {{ d.file_name }}
             {% if d.path_in_archive %}<div class="muted small">{{ d.path_in_archive }}</div>{% endif %}
             {% if d.page_count %}<div class="muted small">{{ d.page_count }} {{ t('project.docs.pages') }}</div>{% endif %}
+            {% if removable and zone.package.id in removable %}
+              <form method="post" action="/projects/{{ project.id }}/documents/{{ d.id }}/remove" class="inline-form">
+                <button type="submit" class="btn small">{{ t('project.docs.remove') }}</button>
+              </form>
+            {% endif %}
           </td>
           <td data-label="{{ t('project.docs.type') }}">
             <form method="post" action="/projects/{{ project.id }}/documents/{{ d.id }}/doc-type" class="inline-form">

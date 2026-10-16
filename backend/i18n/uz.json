@@ -488,5 +488,11 @@
   "decision.text": "Qaror va izoh",
   "decision.submit": "Qarorni yozish",
   "decision.saved": "Qaror jurnalga yozildi.",
-  "run.unfinished": "Ishlanmagan bandlar: {count}. Ular «Tekshirish kerak» deb koʻrsatilgan."
+  "run.unfinished": "Ishlanmagan bandlar: {count}. Ular «Tekshirish kerak» deb koʻrsatilgan.",
+  "box.wrong.tender": "Buyurtmachi hujjatlariga taklif yuklanganga oʻxshaydi: {files}. Taklifdan notoʻgʻri nazorat roʻyxati chiqadi. Faylni «Taklif» blokiga oʻtkazing yoki baribir ishga tushiring.",
+  "box.wrong.bid": "Taklif oʻrniga tender hujjatlari yuklanganga oʻxshaydi: {files}. Fayllarni tekshiring yoki baribir ishga tushiring.",
+  "box.hint.tender": "Bu fayl buyurtmachi hujjatiga emas, taklifga oʻxshaydi: {files}.",
+  "box.hint.bid": "Bu fayl taklifga emas, tender hujjatlariga oʻxshaydi: {files}.",
+  "box.run_anyway": "Baribir ishga tushirish",
+  "project.docs.remove": "Faylni oʻchirish"
 }
