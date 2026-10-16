@@ -156,6 +156,22 @@ def delete_bidder(
         raise HTTPException(status_code=409, detail="bidder has a check in progress")
 
     documents = list(session.exec(select(Document).where(Document.package_id == package.id)).all())
+    files = delete_documents(session, documents)
+    session.add(AuditLog(
+        action="bidder.delete", entity="package", entity_id=package.id,
+        before={"name": package.bidder_name, "stir": package.bidder_stir, "documents": len(documents)},
+        after={},
+    ))
+    session.delete(package)
+    session.commit()
+
+    remove_files(store, files)
+    return Response(status_code=204)
+
+
+def delete_documents(session: Session, documents: list[Document]) -> list[str | None]:
+    """Delete documents with their pages and page cards (flushed, not committed). Returns the stored
+    file paths to remove from disk after the commit."""
     doc_ids = [d.id for d in documents]
     pages = list(session.exec(select(Page).where(col(Page.document_id).in_(doc_ids))).all()) if doc_ids else []
     page_ids = [p.id for p in pages]
@@ -166,6 +182,10 @@ def delete_bidder(
     if page_ids:
         for card in session.exec(select(PageCard).where(col(PageCard.page_id).in_(page_ids))).all():
             session.delete(card)
+        # A page of another document may be marked as a duplicate of one of these pages.
+        for other in session.exec(select(Page).where(col(Page.duplicate_of_page_id).in_(page_ids))).all():
+            other.duplicate_of_page_id = None
+            session.add(other)
     session.flush()
     for page in pages:
         session.delete(page)
@@ -173,22 +193,39 @@ def delete_bidder(
     for document in documents:
         session.delete(document)
     session.flush()
+    return [d.stored_path for d in documents] + [d.pdf_path for d in documents] + [p.image_path for p in pages]
 
-    files = [d.stored_path for d in documents] + [d.pdf_path for d in documents] + [p.image_path for p in pages]
-    session.add(AuditLog(
-        action="bidder.delete", entity="package", entity_id=package.id,
-        before={"name": package.bidder_name, "stir": package.bidder_stir, "documents": len(documents)},
-        after={},
-    ))
-    session.delete(package)
-    session.commit()
 
+def remove_files(store: FileStore, files: list[str | None]) -> None:
     for rel_path in files:
         if rel_path:
             try:
                 store.delete(rel_path)
             except ValueError:  # outside the storage root: nothing of ours to remove
                 pass
+
+
+@router.delete("/projects/{project_id}/documents/{document_id}", status_code=204)
+def delete_document(
+    project_id: int,
+    document_id: int,
+    session: Session = Depends(get_session),
+    store: FileStore = Depends(get_store),
+) -> Response:
+    """Remove one uploaded file, e.g. one put in the wrong box. Allowed only while its package has no
+    run at all: a run's results point at the file's pages."""
+    document = session.get(Document, document_id)
+    package = session.get(Package, document.package_id) if document is not None else None
+    if document is None or package is None or package.project_id != project_id:
+        raise HTTPException(status_code=404, detail="document not found")
+    if session.exec(select(Run.id).where(Run.package_id == package.id).limit(1)).first() is not None:
+        raise HTTPException(status_code=409, detail="the package was already checked; create a new project instead")
+    name = document.file_name
+    files = delete_documents(session, [document])
+    session.add(AuditLog(action="document.delete", entity="document", entity_id=document_id,
+                         before={"file_name": name, "package_id": package.id}, after={}))
+    session.commit()
+    remove_files(store, files)
     return Response(status_code=204)
 
 

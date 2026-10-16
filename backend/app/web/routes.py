@@ -23,6 +23,7 @@ from app.api.customer import (
     check_all,
     create_bidder,
     delete_bidder,
+    delete_document,
     list_decisions,
 )
 from app.api.checklist import (
@@ -68,6 +69,8 @@ from app.schemas_customer import BidderCreate, DecisionIn
 from app.schemas_results import ItemOut, OverrideIn, ResultsOut
 from app.storage import FileStore, get_store
 from app.web.i18n import LANG_COOKIE, Translator, pick_lang, translator
+from app.settings import get_settings
+from engine.box_check import misplaced
 from engine.cards import DOC_TYPES
 from engine.comparison import (
     ComparisonError,
@@ -258,6 +261,30 @@ def _documents(session: Session, package_id: int) -> list[Document]:
     return list(
         session.exec(select(Document).where(Document.package_id == package_id).order_by(Document.id)).all()
     )
+
+
+def _misplaced_files(session: Session, package: Package) -> list[str]:
+    """Names of files in this package that look like they belong in the other box (code check only)."""
+    box = "tender" if package.role == PackageRole.tender else "bid"
+    root = get_settings().data_dir
+    out = []
+    for d in _documents(session, package.id):
+        rel = d.pdf_path or d.stored_path
+        if misplaced(d.file_name, root / rel if rel else None, box):
+            out.append(d.file_name)
+    return out
+
+
+def _unchecked(session: Session, packages: list[Package]) -> set[int]:
+    """Packages with no run yet: their files can still be removed."""
+    ids = [p.id for p in packages]
+    used = set(session.exec(select(Run.package_id).where(col(Run.package_id).in_(ids))).all()) if ids else set()
+    return {pid for pid in ids if pid not in used}
+
+
+def _wrong_box(session: Session, packages: list[Package]) -> dict[int, list[str]]:
+    found = {p.id: _misplaced_files(session, p) for p in packages}
+    return {pid: names for pid, names in found.items() if names}
 
 
 def _has_approved_checklist(session: Session, project_id: int) -> bool:
@@ -483,9 +510,11 @@ def _project_view(
     status_code: int = 200,
     error: str | None = None,
     notice: str | None = None,
+    confirm_package: int | None = None,
 ) -> HTMLResponse:
     if _is_customer(project):
-        return _customer_project_view(request, session, project, status_code=status_code, error=error, notice=notice)
+        return _customer_project_view(request, session, project, status_code=status_code, error=error,
+                                      notice=notice, confirm_package=confirm_package)
     tr = _tr(request)
     tender, bid = _ensure_packages(session, project)
     runs = session.exec(
@@ -511,6 +540,9 @@ def _project_view(
         bid=bid,
         tender_docs=_documents(session, tender.id),
         bid_docs=_documents(session, bid.id),
+        wrong_box=_wrong_box(session, [tender, bid]),
+        removable=_unchecked(session, [tender, bid]),
+        confirm_package=confirm_package,
         doc_types=DOC_TYPES,
         approved=_has_approved_checklist(session, project.id),
         panels=[_panel(run, tr, project.id, approved_version, snapshot=snaps.get(run.id),
@@ -592,15 +624,41 @@ def set_doc_type_page(
     return _redirect(f"/projects/{project_id}")
 
 
+@router.post("/projects/{project_id}/documents/{document_id}/remove")
+def remove_document_page(
+    project_id: int,
+    document_id: int,
+    request: Request,
+    session: Session = Depends(get_session),
+    store: FileStore = Depends(get_store),
+) -> Response:
+    project = _project_or_404(session, project_id)
+    try:
+        delete_document(project_id=project.id, document_id=document_id, session=session, store=store)
+    except HTTPException as exc:
+        session.rollback()
+        return _project_view(request, session, project, status_code=exc.status_code,
+                             error=_error_text(_tr(request), exc))
+    return _redirect(f"/projects/{project_id}")
+
+
 @router.post("/projects/{project_id}/packages/{package_id}/runs")
 def start_run_page(
     project_id: int,
     package_id: int,
     request: Request,
+    confirm: str = Form(""),
     session: Session = Depends(get_session),
 ) -> Response:
     project = _project_or_404(session, project_id)
     package = _package_in_project(session, project_id, package_id)
+    if confirm != "1":
+        names = _misplaced_files(session, package)
+        if names:
+            tr = _tr(request)
+            key = "box.wrong.tender" if package.role == PackageRole.tender else "box.wrong.bid"
+            return _project_view(request, session, project, status_code=409,
+                                 error=tr(key, files=", ".join(names)), confirm_package=package.id)
     try:
         start_run(package_id=package.id, body=RunCreate(), session=session)
     except HTTPException as exc:
@@ -2035,6 +2093,7 @@ def _bidder_cards(session: Session, tr: Any, project: Project) -> list[dict[str,
 def _customer_project_view(
     request: Request, session: Session, project: Project, *,
     status_code: int = 200, error: str | None = None, notice: str | None = None,
+    confirm_package: int | None = None,
 ) -> HTMLResponse:
     tr = _tr(request)
     tender, _ = _ensure_packages(session, project)
@@ -2053,6 +2112,9 @@ def _customer_project_view(
         approved=_has_approved_checklist(session, project.id),
         panels=[_panel(run, tr, project.id, approved_number) for run in tender_runs],
         cards=_bidder_cards(session, tr, project),
+        wrong_box=_wrong_box(session, [tender, *bid_packages(session, project.id)]),
+        removable=_unchecked(session, [tender, *bid_packages(session, project.id)]),
+        confirm_package=confirm_package,
         deadline=_deadline_status(project.submission_deadline),
         deadline_text=_deadline_text(project.submission_deadline),
         deadline_input=_dt_input(project.submission_deadline),
@@ -2101,9 +2163,19 @@ def remove_bidder_page(
     return _redirect(f"/projects/{project.id}")
 
 
+CONFIRM_CHECK_ALL = -1  # confirm_package value for the "Check all bidders" button
+
+
 @router.post("/projects/{project_id}/check-all")
-def check_all_page(project_id: int, request: Request, session: Session = Depends(get_session)) -> Response:
+def check_all_page(project_id: int, request: Request, confirm: str = Form(""),
+                   session: Session = Depends(get_session)) -> Response:
     project = _customer_or_404(session, project_id)
+    if confirm != "1":
+        names = [n for pkg in bid_packages(session, project.id) for n in _misplaced_files(session, pkg)]
+        if names:
+            return _project_view(request, session, project, status_code=409,
+                                 error=_tr(request)("box.wrong.bid", files=", ".join(names)),
+                                 confirm_package=CONFIRM_CHECK_ALL)
     try:
         result = check_all(project_id=project.id, session=session)
     except HTTPException as exc:
