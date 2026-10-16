@@ -391,14 +391,26 @@ def test_add_requirement_redirects(client: TestClient, seeded: dict[str, Any]) -
 def test_progress_fragment_renders_stage_rows(client: TestClient, seeded: dict[str, Any]) -> None:
     _lang(client, "en")
     project_id, run_id = seeded["project"], seeded["run"]
+    # A finished run is one compact line: no stage table, no polling trigger.
     resp = client.get(f"/projects/{project_id}/runs/{run_id}/progress")
     assert resp.status_code == 200
-    assert "Requirement extraction" in resp.text
-    assert "Quote verification" in resp.text
-    assert "3 / 3" in resp.text
-    # Finished runs carry no polling trigger, so HTMX stops asking.
+    assert "Requirement extraction" not in resp.text
     assert "hx-trigger" not in resp.text
-    assert "Warnings: 0" in resp.text
+    assert "Warnings:" not in resp.text
+    # While it works, the stage table is shown with readable labels.
+    _set_run(run_id, status=RunStatus.running, stage="extract")
+    running = client.get(f"/projects/{project_id}/runs/{run_id}/progress").text
+    assert "Requirement extraction" in running
+    assert "Quote verification" in running
+    assert "3 / 3" in running
+
+
+def test_finished_run_with_unprocessed_items_says_so(client: TestClient, seeded: dict[str, Any]) -> None:
+    _set_run(seeded["run"], status=RunStatus.done, progress={"match": {"done": 22, "total": 23, "pending": 1}})
+    _lang(client, "en")
+    text = client.get(f"/projects/{seeded['project']}/runs/{seeded['run']}/progress").text
+    assert "1 items were not processed" in text
+    assert "22 / 23" not in text
 
 
 def test_progress_fragment_polls_while_running(client: TestClient, seeded: dict[str, Any]) -> None:
@@ -1080,14 +1092,17 @@ def test_summary_renders_questions_in_ru_and_en(client: TestClient) -> None:
 def test_project_tender_block_shows_approved_checklist_and_readable_stages(
     client: TestClient, seeded: dict[str, Any]
 ) -> None:
-    _set_run(seeded["run"], progress={
+    _set_run(seeded["run"], status=RunStatus.running, stage="consolidate", progress={
         "extract": {"done": 3, "total": 3},
         "consolidate": {"done": 1, "total": 1},
     })
     _lang(client, "en")
+    working = client.get(f"/projects/{seeded['project']}").text
+    assert "Checklist consolidation" in working
+    assert "stage.consolidate" not in working
+
+    _set_run(seeded["run"], status=RunStatus.waiting_approval)
     before = client.get(f"/projects/{seeded['project']}").text
-    assert "Checklist consolidation" in before
-    assert "stage.consolidate" not in before
     assert "Review and approve the checklist" in before  # the checklist is still a draft
 
     with session_scope() as s:
@@ -1343,3 +1358,12 @@ def test_project_create_form_keeps_uzbek_selected_on_error(client: TestClient) -
     resp = client.post("/projects", data={"name": "   ", "report_lang": "uz"}, follow_redirects=False)
     assert resp.status_code == 422
     assert '<option value="uz" selected' in resp.text
+
+
+def test_project_page_shows_only_the_latest_check_per_package(client: TestClient, seeded: dict[str, Any]) -> None:
+    with session_scope() as s:
+        for _ in range(3):
+            s.add(Run(package_id=seeded["bid"], kind=RunKind.bid, status=RunStatus.done, progress={}))
+    _lang(client, "en")
+    text = client.get(f"/projects/{seeded['project']}").text
+    assert text.count('class="card run"') == 2  # the tender analysis and the newest bid check
