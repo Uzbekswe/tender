@@ -99,12 +99,20 @@ CHECKLIST_NOTICES = {
 }
 REQ_TYPES = ("mandatory", "scored", "desirable")
 SCOPES = ("goods", "bidder")
+THEME_COOKIE = "theme"  # "light" or "dark"; no cookie means follow the system setting
+THEMES = ("light", "dark")
 
 
 # ---------- request helpers ----------
 
 def _lang(request: Request) -> str:
     return pick_lang(request.cookies.get(LANG_COOKIE))
+
+
+def _theme(request: Request) -> str | None:
+    """The colour theme chosen with the header button (cookie `theme`); None means follow the system."""
+    raw = request.cookies.get(THEME_COOKIE)
+    return raw if raw in THEMES else None
 
 
 def _tr(request: Request) -> Translator:
@@ -123,7 +131,7 @@ def _current_path(request: Request) -> str:
 def _render(request: Request, name: str, *, status_code: int = 200, **ctx: Any) -> HTMLResponse:
     lang = _lang(request)
     ctx.setdefault("active", "projects")
-    ctx.update(lang=lang, t=translator(lang), next_url=_current_path(request))
+    ctx.update(lang=lang, t=translator(lang), next_url=_current_path(request), theme=_theme(request))
     ctx.update(_top_nav(ctx))
     return templates.TemplateResponse(request, name, ctx, status_code=status_code)
 
@@ -1100,7 +1108,7 @@ CRITICAL_STATUSES = ("does_not_meet", "not_confirmed")  # mandatory items in the
 REDUCING_STATUSES = ("does_not_meet", "not_confirmed", "partial")
 POINTS_CLASSES = ("pass", "fail", "uncertain")
 EXCERPT_RADIUS = 240   # characters of page text kept on each side of a quote
-PAGES_LISTED = 40      # pages searched are listed up to this many
+PAGES_PER_DOCUMENT = 12  # page numbers listed per document under "Pages searched"; the rest is counted
 
 
 def _fmt(value: float | None, digits: int | None = None) -> str:
@@ -1226,20 +1234,33 @@ def _excerpt(text: str, spans: list[list[int]]) -> Markup:
 
 
 def _pages_searched(session: Session, tr: Translator, page_ids: list[int]) -> dict[str, Any]:
+    """The pages searched, grouped per document: the file name once, then its page numbers.
+
+    `count` is every page searched; each group lists up to PAGES_PER_DOCUMENT numbers and counts the rest.
+    """
     if not page_ids:
-        return {"count": 0, "text": ""}
+        return {"count": 0, "groups": []}
     found = session.exec(
-        select(Document.file_name, Page.number)
+        select(Document.id, Document.file_name, Page.number)
         .select_from(Page)
         .join(Document, Page.document_id == Document.id)
         .where(col(Page.id).in_(page_ids))
-        .order_by(Document.file_name, Page.number)
+        .order_by(Document.file_name, Document.id, Page.number)
     ).all()
-    labels = [f"{name} · {tr('compare.panel.page')} {number}" for name, number in found]
-    text = ", ".join(labels[:PAGES_LISTED])
-    if len(labels) > PAGES_LISTED:
-        text += " " + tr("compare.panel.more", n=len(labels) - PAGES_LISTED)
-    return {"count": len(page_ids), "text": text}
+    by_document: dict[int, dict[str, Any]] = {}
+    for doc_id, name, number in found:
+        group = by_document.setdefault(int(doc_id), {"file": name, "numbers": []})
+        group["numbers"].append(int(number))
+    groups = []
+    for group in by_document.values():
+        numbers = group["numbers"]
+        shown = numbers[:PAGES_PER_DOCUMENT]
+        groups.append({
+            "file": group["file"],
+            "pages": ", ".join(str(n) for n in shown),
+            "more": len(numbers) - len(shown),
+        })
+    return {"count": len(page_ids), "groups": groups}
 
 
 def _row_view(tr: Translator, run_id: int, item: ItemOut, *, selected: bool, only_issues: bool,
@@ -1252,7 +1273,6 @@ def _row_view(tr: Translator, run_id: int, item: ItemOut, *, selected: bool, onl
         "parameter": display_name(item.requirement.parameter, item.requirement.parameter_ru, tr.lang),
         "status": item.status,
         "status_label": _status_label(tr, item.status),
-        "confidence": _fmt(item.confidence, 0),
         "href": _compare_url(run_id, only_issues=only_issues, scope=scope, status=status, req=rid),
         "selected": selected,
     }
@@ -1300,7 +1320,7 @@ def _platform_card(session: Session, tr: Translator, run_id: int, results: Any, 
         "confirmed": confirmed,
         "total": len(rows),
         "title": tr("platform.card.title", confirmed=confirmed, total=len(rows)),
-        "open": open_ or confirmed < len(rows),
+        "open": open_,  # folded by default (its title shows "0 of 8 confirmed"); stays open after a confirm click
     }
 
 
@@ -1411,7 +1431,7 @@ def _platform_detail_view(session: Session, tr: Translator, run_id: int, check: 
         "rationale": "",
         "confidence": "",
         "confidence_parts": [],
-        "searched": {"count": 0, "text": ""},
+        "searched": {"count": 0, "groups": []},
         "recommendation": None,
         "override": None,
         "options": [],
@@ -1438,7 +1458,9 @@ def _detail_view(session: Session, tr: Translator, run_id: int, requirement_id: 
             "file": src.file_name,
             "page": src.page_number,
             "image_url": src.image_url,
-            "marked": _marked(src.text, src.spans),
+            # the quote with its own surroundings, shown under the page image; None when the quote was not located
+            "excerpt": _excerpt(src.text, src.spans) if src.spans else None,
+            "marked": _marked(src.text, src.spans),  # the whole page, under "Page text"
         }
     evidence = [
         {
