@@ -86,3 +86,12 @@ def test_theme_button_has_a_translated_label(client: TestClient, lang: str) -> N
     # the script that flips the theme writes the cookie the server reads
     assert "document.cookie = 'theme=' + next" in text
     assert "max-age=31536000; SameSite=Lax" in text
+
+
+def test_static_files_carry_a_version_so_browsers_do_not_use_a_stale_copy(client: TestClient) -> None:
+    import re as _re
+
+    page = client.get("/").text
+    assert _re.search(r'href="/static/app\.css\?v=\d+"', page)
+    assert _re.search(r'src="/static/htmx\.min\.js\?v=\d+"', page)
+    assert 'width="16" height="16"' in page  # icons keep their size even without the stylesheet
