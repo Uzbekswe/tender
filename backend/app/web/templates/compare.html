@@ -2,7 +2,7 @@
 {% block title %}{{ t('compare.title') }} · {{ project_name }}{% endblock %}
 {% block content %}
 {# base.html has no head block for page styles, so the comparison stylesheet is linked here. #}
-<link rel="stylesheet" href="/static/compare.css">
+<link rel="stylesheet" href="{{ asset('compare.css') }}">
 {% if customer %}
 <p><a href="/projects/{{ project_id }}/comparison">{{ t('comparison.back') }}</a></p>
 {% else %}

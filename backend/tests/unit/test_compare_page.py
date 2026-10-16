@@ -146,7 +146,7 @@ def test_long_file_names_are_truncated_with_the_full_name_in_title(client: TestC
 def test_the_page_links_the_comparison_stylesheet_and_it_is_served(client: TestClient) -> None:
     ids = seed_scored_bid(client)
     body = client.get(f"/runs/{ids['run']}/compare").text
-    assert '<link rel="stylesheet" href="/static/compare.css">' in body
+    assert '<link rel="stylesheet" href="/static/compare.css?v=' in body  # versioned: no stale cached copy
 
     css = client.get("/static/compare.css")
     assert css.status_code == 200

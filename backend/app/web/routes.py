@@ -85,6 +85,20 @@ from engine.score_stages import ItemRow, RunRows, load_run_rows
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+
+def asset(name: str) -> str:
+    """URL of a static file with its modification time as a version, so a browser fetches the new
+    file after an update instead of using a stale cached copy."""
+    try:
+        version = int((STATIC_DIR / name).stat().st_mtime)
+    except OSError:
+        return f"/static/{name}"
+    return f"/static/{name}?v={version}"
+
+
+templates.env.globals["asset"] = asset
 
 router = APIRouter(tags=["web"])
 
