@@ -6,7 +6,6 @@
     <p>
       <a class="code" href="{{ s.href }}">{{ s.code }}</a> {{ s.parameter }}
       <span class="chip status-{{ s.status }}">{{ s.status_label }}</span>
-      {% if s.impact and not customer %}<span class="muted small">{{ t('compare.panel.impact') }} {{ s.impact }}</span>{% endif %}
     </p>
     {% if customer %}
       {% if s.sentence %}<p class="small">{{ s.sentence }}</p>{% endif %}
@@ -41,25 +40,37 @@
   {% for s in critical %}{{ item_line(s) }}{% else %}<p class="muted">{{ t('summary.empty') }}</p>{% endfor %}
 </section>
 
+{% if reducing %}
 <section class="card">
   <h2>{{ t('customer.summary.open') if customer else t('summary.section.score') }} <span class="muted small">({{ reducing|length }})</span></h2>
-  {% for s in reducing %}{{ item_line(s) }}{% else %}<p class="muted">{{ t('summary.empty') }}</p>{% endfor %}
+  {% for s in reducing %}{{ item_line(s) }}{% endfor %}
 </section>
+{% endif %}
 
+{% if review or contradictions or questions %}
 <section class="card">
   <h2>{{ t('committee.observations') if customer else t('summary.section.risks') }}</h2>
+  {% if review %}
   <h3>{{ t('summary.risks.review') }} <span class="muted small">({{ review|length }})</span></h3>
-  {% for s in review %}{{ item_line(s) }}{% else %}<p class="muted">{{ t('summary.empty') }}</p>{% endfor %}
+  {% for s in review %}{{ item_line(s) }}{% endfor %}
+  {% endif %}
+  {% if contradictions %}
   <h3>{{ t('summary.risks.contradictions') }} <span class="muted small">({{ contradictions|length }})</span></h3>
-  {% for c in contradictions %}<p class="small">{{ c.text }}</p>{% else %}<p class="muted">{{ t('summary.empty') }}</p>{% endfor %}
+  {% for c in contradictions %}<p class="small">{{ c.text }}</p>{% endfor %}
+  {% endif %}
+  {% if questions %}
   <h3>{{ t('summary.risks.questions') }} <span class="muted small">({{ questions|length }})</span></h3>
-  {% for q in questions %}<p class="small"><span class="badge">{{ q.kind }}</span> {{ q.text }}</p>{% else %}<p class="muted">{{ t('summary.empty') }}</p>{% endfor %}
+  {% for q in questions %}<p class="small"><span class="badge">{{ q.kind }}</span> {{ q.text }}</p>{% endfor %}
+  {% endif %}
 </section>
+{% endif %}
 
+{% if strengths %}
 <section class="card">
   <h2>{{ t('customer.summary.strengths') if customer else t('summary.section.strengths') }} <span class="muted small">({{ strengths|length }})</span></h2>
-  {% for s in strengths %}{{ item_line(s) }}{% else %}<p class="muted">{{ t('summary.empty') }}</p>{% endfor %}
+  {% for s in strengths %}{{ item_line(s) }}{% endfor %}
 </section>
+{% endif %}
 
 {% if platform %}
 <section class="card platform-sum">
@@ -78,51 +89,6 @@
 </section>
 {% endif %}
 
-{% if not customer %}
-<section class="card">
-  <h2>{{ t('summary.section.plan') }}</h2>
-  {% if plan %}
-  <div class="table-wrap">
-    <table class="data">
-      <thead>
-        <tr>
-          <th>{{ t('checklist.col.code') }}</th>
-          <th>{{ t('compare.panel.problem') }}</th>
-          <th>{{ t('compare.panel.action') }}</th>
-          <th>{{ t('compare.panel.action_type') }}</th>
-          <th>{{ t('compare.panel.impact') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-      {% for s in plan %}
-        <tr>
-          <td data-label="{{ t('checklist.col.code') }}" class="code"><a href="{{ s.href }}">{{ s.code }}</a></td>
-          <td data-label="{{ t('compare.panel.problem') }}">{{ s.problem }}</td>
-          <td data-label="{{ t('compare.panel.action') }}">{{ s.action }}</td>
-          <td data-label="{{ t('compare.panel.action_type') }}">{{ s.action_type }}</td>
-          <td data-label="{{ t('compare.panel.impact') }}">{{ s.impact }}</td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% else %}
-    <p class="muted">{{ t('summary.empty') }}</p>
-  {% endif %}
-</section>
-
-<section class="card collect">
-  <h2>{{ t('summary.section.collect') }} <span class="muted small">({{ collect|length }})</span></h2>
-  {% if collect %}
-    <p class="muted small">{{ t('summary.collect_hint') }}</p>
-    {% for e in collect %}
-      <label><input type="checkbox"> <span><span class="code">{{ e.code }}</span> {{ e.parameter }}: {{ e.action }} <span class="muted small">({{ e.impact }})</span></span></label>
-    {% endfor %}
-  {% else %}
-    <p class="muted">{{ t('summary.empty') }}</p>
-  {% endif %}
-</section>
-{% endif %}
 {% if customer %}
 <section class="card">
   <h2>{{ t('committee.not_provided') }} <span class="muted small">({{ not_provided|length }})</span></h2>

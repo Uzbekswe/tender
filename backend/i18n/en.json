@@ -317,8 +317,8 @@
   "platform.state.confirmed": "Confirmed on the platform",
   "platform.state.pending": "Not confirmed",
   "summary.title": "Summary",
-  "summary.headline": "{verdict}: {overall}%, {points} of {stated} points (pass mark {pass_mark}), {critical} critical issues.",
-  "summary.headline_no_points": "{verdict}: {overall}%, {critical} critical issues.",
+  "summary.headline": "{verdict}. Mandatory items to fix: {critical}. Compliance {overall}%. Tender points {points} of {stated} (pass mark {pass_mark}).",
+  "summary.headline_no_points": "{verdict}. Mandatory items to fix: {critical}. Compliance {overall}%.",
   "summary.headline.platform.one": "{n} item is checked on the platform.",
   "summary.headline.platform.few": "{n} items are checked on the platform.",
   "summary.headline.platform.many": "{n} items are checked on the platform.",
@@ -494,5 +494,6 @@
   "box.hint.tender": "This file looks like a bid, not the customer's tender documents: {files}.",
   "box.hint.bid": "This file looks like tender documents, not a bid: {files}.",
   "box.run_anyway": "Run anyway",
-  "project.docs.remove": "Remove file"
+  "project.docs.remove": "Remove file",
+  "checklist.approve_with_suggestions": "Apply {n} suggestions and approve"
 }

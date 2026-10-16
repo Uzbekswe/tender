@@ -775,3 +775,26 @@ def test_expert_flag_on_an_ordinary_requirement_is_ignored_and_counted(data_dir:
     # T-001 meets, U-001 is partial, U-002 not confirmed, U-004 does not meet: four mandatory items with a
     # clear Sonnet answer. U-003 is unclear and is re-asked on the hard tier.
     assert run.progress["llm"]["escalation_skipped"] == 4
+
+
+def test_offer_terms_are_met_by_the_bidders_commitment_when_the_tender_names_no_document() -> None:
+    # Payment terms: the extraction model guessed "contract" as evidence, but the tender asks for no
+    # document; the bidder's verified statement of the same terms is the evidence.
+    req = _req(code="T-002", scope="goods", parameter="Условия оплаты", evidence_doc_types=("contract",),
+               confirmation_method=None)
+    checked = _assess(req, _answer("satisfies", _ev(GUARANTEE)), _page("technical_proposal", GUARANTEE))
+    assert checked.result["status"] == Status.meets
+    assert "CLAIM_ONLY" not in checked.result["reason_codes"]
+
+
+def test_a_document_the_tender_names_still_needs_proof_for_offer_terms() -> None:
+    req = _req(code="T-030", scope="goods", parameter="Сертификат соответствия", evidence_doc_types=("certificate",),
+               confirmation_method="Сертификат соответствия на оборудование")
+    checked = _assess(req, _answer("satisfies", _ev(GUARANTEE)), _page("technical_proposal", GUARANTEE))
+    assert checked.result["status"] == Status.not_confirmed
+
+
+def test_bidder_qualification_without_a_named_document_still_needs_proof() -> None:
+    checked = _assess(_req(confirmation_method=None), _answer("satisfies", _ev(GUARANTEE)),
+                      _page("technical_proposal", GUARANTEE))
+    assert checked.result["status"] == Status.not_confirmed
