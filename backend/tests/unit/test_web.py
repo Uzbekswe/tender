@@ -717,8 +717,12 @@ def test_item_panel_lists_the_pages_searched_for_an_absence(client: TestClient) 
         s.add(match)
     _lang(client, "en")
     body = client.get(f"/runs/{ids['run']}/compare/items/{ids['T-001']}", headers={"HX-Request": "true"}).text
-    assert "Pages searched: 2" in body
-    assert "proposal.pdf · p. 1" in body and "proposal.pdf · p. 2" in body
+    # Collapsed <details> with the count; the file name is printed once, with its page numbers after it.
+    assert '<details class="cmp-details cmp-searched">' in body
+    assert "<summary>Pages searched (2)</summary>" in body
+    assert ">proposal.pdf</div>" in body
+    assert "pp. 1, 2" in body
+    assert "proposal.pdf · p. 1" not in body
 
 
 # ---------- consolidation suggestions on the checklist ----------
@@ -968,7 +972,7 @@ def test_compare_shows_platform_card_and_keeps_those_items_out_of_the_list(
     run, pid = platform_bid["run"], platform_bid["P-001"]
     _lang(client, "en")
     text = client.get(f"/runs/{run}/compare").text
-    assert 'id="platform-card"' in text and ' open>' in text  # unconfirmed items open the card
+    assert 'id="platform-card"' in text and ' open>' not in text  # folded by default; the title shows the count
     assert "Check on the platform (0 of 1 confirmed)" in text
     assert "On the platform: 0 of 1" in text  # the top bar line
     assert "Synthetic platform quote" in text
@@ -1331,8 +1335,8 @@ def test_lang_route_switches_the_ui_to_uzbek(client: TestClient, seeded: dict[st
     assert page.status_code == 200
     assert '<html lang="uz">' in page.text
     assert "Loyihalar" in page.text
-    assert 'class="on" hreflang="uz"' in page.text  # the UZ link is the active one
-    assert 'class="on" hreflang="ru"' not in page.text
+    assert 'hreflang="uz" class="on"' in page.text  # the Oʻzbekcha item in the language menu is the active one
+    assert 'hreflang="ru" class="on"' not in page.text
     project = client.get(f"/projects/{seeded['project']}")
     assert "Buyurtmachi hujjatlari" in project.text
 
