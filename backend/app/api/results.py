@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import io
 import re
+from datetime import date
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -57,7 +58,9 @@ from app.schemas_results import (
     SourcePageOut,
     TenderSourceOut,
 )
+from app.web.i18n import pick_lang, translator
 from engine import scoring
+from engine.letter_docx import DOCX_MIME, clarification_docx
 from engine.recommend import CollectEntry, QuestionView, collect_list, clarification_request
 from engine.score_stages import (
     EvidenceRow,
@@ -590,6 +593,7 @@ def _question_view(session: Session, question: Question) -> QuestionView:
         document = session.get(Document, page.document_id) if page is not None else None
         sources.append({
             "quote": src.get("quote"),
+            "code": src.get("code"),
             "page": page.number if page is not None else None,
             "file": (
                 f"{document.path_in_archive}/{document.file_name}"
@@ -611,4 +615,27 @@ def export_clarification(project_id: int, session: Session = Depends(get_session
         content=body.encode("utf-8"),
         media_type="text/plain; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="clarification-project-{project_id}.txt"'},
+    )
+
+
+@router.get("/projects/{project_id}/export/clarification.docx")
+def export_clarification_docx(project_id: int, session: Session = Depends(get_session)) -> Response:
+    project = _get_or_404(session, Project, project_id, "project")
+    questions = session.exec(
+        select(Question).where(Question.project_id == project_id).order_by(Question.id)
+    ).all()
+    lang = pick_lang(project.report_lang)
+    data = clarification_docx(
+        [_question_view(session, q) for q in questions],
+        lang=lang,
+        tr=translator(lang),
+        project_name=project.name,
+        customer=project.customer,
+        lot_number=project.lot_number,
+        today=date.today(),
+    )
+    return Response(
+        content=data,
+        media_type=DOCX_MIME,
+        headers={"Content-Disposition": f'attachment; filename="clarification-{project_id}.docx"'},
     )

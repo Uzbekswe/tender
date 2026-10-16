@@ -342,6 +342,11 @@
   "summary.downloads": "Выгрузка",
   "summary.download.xlsx": "Скачать XLSX",
   "summary.download.clarification": "Скачать запрос на разъяснение",
+  "summary.download.pdf": "Скачать PDF",
+  "summary.download.pdf_hint": "Откроется печать. Выберите «Сохранить как PDF».",
+  "summary.print.title": "Итог проверки заявки",
+  "customer.summary.print.title": "Итог для комиссии",
+  "summary.print.date": "Дата",
   "history.title": "История проверок",
   "history.empty": "Проверок заявки пока нет.",
   "history.col.run": "Проверка",
@@ -499,5 +504,13 @@
   "box.run_anyway": "Всё равно запустить",
   "project.docs.remove": "Удалить файл",
   "checklist.approve_with_suggestions": "Применить предложения ({n}) и утвердить",
-  "run.already_running": "Проверка уже идёт — дождитесь её окончания, страница обновится сама."
+  "run.already_running": "Проверка уже идёт — дождитесь её окончания, страница обновится сама.",
+  "clarification.to": "Кому: {name}",
+  "clarification.to_customer": "Заказчику",
+  "clarification.project": "Проект: {name}",
+  "clarification.lot": "Лот № {lot}",
+  "clarification.date": "Дата: {date}",
+  "clarification.no_questions": "По данному проекту вопросов на разъяснение не выявлено.",
+  "clarification.closing": "С уважением,",
+  "clarification.signature": "_______________________ (подпись, ФИО, должность)"
 }

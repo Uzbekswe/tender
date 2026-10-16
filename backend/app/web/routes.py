@@ -1850,7 +1850,7 @@ def _summary_context(session: Session, tr: Translator, run_id: int, results: Res
         ],
         "not_provided": listed(not_provided) if customer else [],
         "xlsx_url": f"/api/v1/runs/{run_id}/export/xlsx",
-        "clarification_url": None if customer else f"/api/v1/projects/{project_id}/export/clarification.txt",
+        "clarification_url": None if customer else f"/api/v1/projects/{project_id}/export/clarification.docx",
     }
 
 

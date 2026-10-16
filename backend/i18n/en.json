@@ -342,6 +342,11 @@
   "summary.downloads": "Downloads",
   "summary.download.xlsx": "Download XLSX",
   "summary.download.clarification": "Download the clarification request",
+  "summary.download.pdf": "Download PDF",
+  "summary.download.pdf_hint": "The print dialog opens. Choose \"Save as PDF\".",
+  "summary.print.title": "Bid check summary",
+  "customer.summary.print.title": "Summary for the committee",
+  "summary.print.date": "Date",
   "history.title": "Check history",
   "history.empty": "No bid checks yet.",
   "history.col.run": "Check",
@@ -499,5 +504,13 @@
   "box.run_anyway": "Run anyway",
   "project.docs.remove": "Remove file",
   "checklist.approve_with_suggestions": "Apply {n} suggestions and approve",
-  "run.already_running": "A check is already running. Wait for it to finish; the page updates by itself."
+  "run.already_running": "A check is already running. Wait for it to finish; the page updates by itself.",
+  "clarification.to": "To: {name}",
+  "clarification.to_customer": "To the customer",
+  "clarification.project": "Project: {name}",
+  "clarification.lot": "Lot No. {lot}",
+  "clarification.date": "Date: {date}",
+  "clarification.no_questions": "No clarification questions were identified for this project.",
+  "clarification.closing": "Sincerely,",
+  "clarification.signature": "_______________________ (signature, full name, position)"
 }

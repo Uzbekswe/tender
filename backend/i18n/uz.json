@@ -342,6 +342,11 @@
   "summary.downloads": "Yuklab olish",
   "summary.download.xlsx": "XLSX yuklab olish",
   "summary.download.clarification": "Tushuntirish soʻrovini yuklab olish",
+  "summary.download.pdf": "PDF yuklab olish",
+  "summary.download.pdf_hint": "Chop etish oynasi ochiladi. «PDF sifatida saqlash» ni tanlang.",
+  "summary.print.title": "Ariza tekshiruvi yakuni",
+  "customer.summary.print.title": "Komissiya uchun yakun",
+  "summary.print.date": "Sana",
   "history.title": "Tekshiruvlar tarixi",
   "history.empty": "Taklif uchun hali tekshiruv yoʻq.",
   "history.col.run": "Tekshiruv",
@@ -499,5 +504,13 @@
   "box.run_anyway": "Baribir ishga tushirish",
   "project.docs.remove": "Faylni oʻchirish",
   "checklist.approve_with_suggestions": "Takliflarni ({n}) qoʻllash va tasdiqlash",
-  "run.already_running": "Tekshiruv allaqachon ketmoqda. Tugashini kuting, sahifa oʻzi yangilanadi."
+  "run.already_running": "Tekshiruv allaqachon ketmoqda. Tugashini kuting, sahifa oʻzi yangilanadi.",
+  "clarification.to": "Kimga: {name}",
+  "clarification.to_customer": "Buyurtmachiga",
+  "clarification.project": "Loyiha: {name}",
+  "clarification.lot": "Lot № {lot}",
+  "clarification.date": "Sana: {date}",
+  "clarification.no_questions": "Ushbu loyiha boʻyicha tushuntirish soʻrovlari aniqlanmadi.",
+  "clarification.closing": "Hurmat bilan,",
+  "clarification.signature": "_______________________ (imzo, F.I.Sh., lavozim)"
 }
