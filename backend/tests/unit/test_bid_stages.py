@@ -798,3 +798,21 @@ def test_bidder_qualification_without_a_named_document_still_needs_proof() -> No
     checked = _assess(_req(confirmation_method=None), _answer("satisfies", _ev(GUARANTEE)),
                       _page("technical_proposal", GUARANTEE))
     assert checked.result["status"] == Status.not_confirmed
+
+
+def test_an_unsure_contradiction_needs_review_not_rejection() -> None:
+    # The model says "contradicts" but asks for an expert: no Does-not-meet on a doubtful answer.
+    req = _req(code="T-002", scope="goods", parameter="Условия оплаты", operator="text",
+               evidence_doc_types=(), confirmation_method=None)
+    checked = _assess(req, _answer("contradicts", _ev(CERT), needs_expert=True), _page("technical_proposal", CERT))
+    assert checked.result["status"] == Status.needs_review
+    assert checked.result["llm_judgement"] == "contradicts"
+    assert bid_stages.UNSURE_CONTRADICTION_NOTE in checked.result["rationale"]
+    assert checked.hard[0] == "rule judgement cannot_judge"  # re-asked once on the hard tier
+
+
+def test_a_sure_contradiction_still_does_not_meet() -> None:
+    req = _req(code="T-002", scope="goods", parameter="Условия оплаты", operator="text",
+               evidence_doc_types=(), confirmation_method=None)
+    checked = _assess(req, _answer("contradicts", _ev(CERT)), _page("technical_proposal", CERT))
+    assert checked.result["status"] == Status.does_not_meet

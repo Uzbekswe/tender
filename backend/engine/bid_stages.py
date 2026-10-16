@@ -935,6 +935,8 @@ def _hard_rules(*, req: _Req, final: _Final, judgement: str | None, claimed: lis
 CLAIM_LABEL_NOTE = ("The model called this a claim without proof, but the quoted page is a proof document "
                     "of an accepted type, or the tender asks only for the bidder's own statement: the code "
                     "treats the content as satisfied.")
+UNSURE_CONTRADICTION_NOTE = ("The model found a difference but was not sure it breaks the requirement: "
+                             "a person should decide.")
 IGNORED_EXPERT_NOTE = "The model asked for an expert, but this is not an equivalence requirement: the flag is ignored."
 
 
@@ -952,6 +954,12 @@ def _assess_one(final: _Final, plan: _Plan) -> _Checked:
         judgement, needs_expert, claimed = ans.judgement, ans.needs_expert, list(ans.evidence)
     model_judgement = judgement
     claim_label_overridden = False
+    # The model says the bid contradicts the requirement but also asks for an expert: it is not sure.
+    # A rejection-level status must not rest on a doubtful answer, so it is treated as "cannot judge":
+    # Needs review, and a mandatory item is re-asked once on the hard tier.
+    unsure_contradiction = judgement == CONTRADICTS and needs_expert and not req.is_equivalent_allowed
+    if unsure_contradiction:
+        judgement = CANNOT_JUDGE
 
     found: list[_Found] = []
     views: list[verdict.EvidenceView] = []
@@ -1074,6 +1082,8 @@ def _assess_one(final: _Final, plan: _Plan) -> _Checked:
         rationale_parts.append(IGNORED_EXPERT_NOTE)
     if claim_label_overridden:
         rationale_parts.append(CLAIM_LABEL_NOTE)
+    if unsure_contradiction:
+        rationale_parts.append(UNSURE_CONTRADICTION_NOTE)
     result = {
         "requirement_id": req.id,
         "status": Status(decision.status),
