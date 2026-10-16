@@ -1,11 +1,11 @@
 {# One requirement, both sides. Loaded into the comparison panel by HTMX, or rendered inside the full page.
    The override form posts here with HTMX; the response replaces this panel. #}
-<section id="compare-panel" class="card panel" data-req="{{ d.id }}">
+<section id="compare-panel" class="card panel cmp-panel" data-req="{{ d.id }}">
   {% if notice %}<div class="alert alert-ok" role="status">{{ notice }}</div>{% endif %}
   {% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
 
   <header class="panel-head">
-    <div>
+    <div class="panel-title">
       <h2><span class="code">{{ d.code }}</span> {{ d.parameter }}</h2>
       {% if d.parameter_original %}<div class="muted small">{{ d.parameter_original }}</div>{% endif %}
     </div>
@@ -24,18 +24,29 @@
         <dt>{{ t('checklist.col.condition') }}</dt><dd>{{ d.condition or t('common.none') }}</dd>
         <dt>{{ t('checklist.col.confirmation') }}</dt><dd>{{ d.confirmation or t('common.none') }}</dd>
       </dl>
-      {% if d.quote %}<blockquote>{{ d.quote }}</blockquote>{% endif %}
-      {% if d.platform and d.platform_page is not none %}
-        <p class="small muted">{{ t('compare.panel.page') }} {{ d.platform_page }}</p>
-      {% endif %}
       {% if d.tender %}
-        <p class="small muted">{{ d.tender.file or '' }} · {{ t('compare.panel.page') }} {{ d.tender.page if d.tender.page is not none else t('common.none') }}</p>
+        <div class="src">
+          <span class="src-name" title="{{ d.tender.file or '' }}">{{ d.tender.file or '' }}</span>
+          <span class="src-meta">{{ t('compare.panel.page') }} {{ d.tender.page if d.tender.page is not none else t('common.none') }}</span>
+        </div>
+        {% if d.tender.excerpt %}
+          <blockquote class="cmp-quote">{{ d.tender.excerpt }}</blockquote>
+        {% elif d.quote %}
+          <blockquote>{{ d.quote }}</blockquote>
+        {% endif %}
         <a href="{{ d.tender.image_url }}" target="_blank" rel="noopener">
           <img class="page-img" src="{{ d.tender.image_url }}" alt="{{ t('compare.panel.page_image') }}" loading="lazy">
         </a>
-        <div class="page-text" tabindex="0">{{ d.tender.marked }}</div>
-      {% elif not d.platform %}
-        <p class="muted">{{ t('compare.panel.no_tender_page') }}</p>
+        <details class="cmp-details">
+          <summary>{{ t('compare.panel.page_text') }}</summary>
+          <div class="page-text" tabindex="0">{{ d.tender.marked }}</div>
+        </details>
+      {% else %}
+        {% if d.quote %}<blockquote>{{ d.quote }}</blockquote>{% endif %}
+        {% if d.platform and d.platform_page is not none %}
+          <p class="src-meta">{{ t('compare.panel.page') }} {{ d.platform_page }}</p>
+        {% endif %}
+        {% if not d.platform %}<p class="muted">{{ t('compare.panel.no_tender_page') }}</p>{% endif %}
       {% endif %}
     </section>
 
@@ -49,14 +60,8 @@
       <h3 id="bid-h-{{ d.id }}">{{ t('compare.panel.bid') }}</h3>
       {% for e in d.evidence %}
         <article class="evidence">
-          <p class="small">
-            <strong>{{ e.file or '' }}</strong> · {{ t('compare.panel.page') }} {{ e.page if e.page is not none else t('common.none') }} ·
-            {% if e.verified %}
-              <span class="verified">✓ {{ t('compare.panel.verified') }}</span>
-            {% else %}
-              <span class="muted">{{ t('compare.panel.not_verified') }}</span>
-            {% endif %}
-          </p>
+          <div class="src-name" title="{{ e.file or '' }}">{{ e.file or '' }}</div>
+          <div class="src-meta">{{ t('compare.panel.page') }} {{ e.page if e.page is not none else t('common.none') }} · {% if e.verified %}<span class="verified">✓ {{ t('compare.panel.verified') }}</span>{% else %}<span class="muted">{{ t('compare.panel.not_verified') }}</span>{% endif %}</div>
           <div class="excerpt">{{ e.excerpt }}</div>
           <a class="small" href="{{ e.image_url }}" target="_blank" rel="noopener">{{ t('compare.panel.open_page') }}</a>
         </article>
@@ -82,14 +87,25 @@
       {% endif %}
       <h3>{{ t('common.confidence') }}: {{ d.confidence }}</h3>
       {% if d.confidence_parts %}
-        <p class="small muted">{{ t('compare.panel.confidence_parts') }}</p>
-        <dl class="kv">
-          {% for p in d.confidence_parts %}<dt>{{ p.label }}</dt><dd>{{ p.value }}</dd>{% endfor %}
-        </dl>
+        <details class="cmp-details">
+          <summary>{{ t('compare.panel.confidence_parts') }}</summary>
+          <dl class="kv">
+            {% for p in d.confidence_parts %}<dt>{{ p.label }}</dt><dd>{{ p.value }}</dd>{% endfor %}
+          </dl>
+        </details>
       {% endif %}
       {% if d.searched.count %}
-        <h3>{{ t('compare.panel.searched') }}: {{ d.searched.count }}</h3>
-        <p class="small muted">{{ d.searched.text }}</p>
+        <details class="cmp-details cmp-searched">
+          <summary>{{ t('compare.panel.searched') }} ({{ d.searched.count }})</summary>
+          <ul class="searched-list">
+            {% for g in d.searched.groups %}
+              <li>
+                <div class="src-name" title="{{ g.file }}">{{ g.file }}</div>
+                <div class="src-meta">{{ t('compare.panel.pages') }} {{ g.pages }}{% if g.more %} … {{ t('compare.panel.more', n=g.more) }}{% endif %}</div>
+              </li>
+            {% endfor %}
+          </ul>
+        </details>
       {% endif %}
     </section>
 

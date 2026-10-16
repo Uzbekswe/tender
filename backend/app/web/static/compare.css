@@ -1,0 +1,175 @@
+/* The bid comparison page (split view): the requirements list on the left, one requirement on the right.
+   Loaded by compare.html only. It comes after app.css, so these rules win at equal specificity.
+   Colours are the tokens of app.css (light and dark themes), never hard-coded. */
+
+h1 { overflow-wrap: anywhere; }
+
+/* ---------- two columns on desktop, one column at 900px and below ---------- */
+.compare {
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.compare > * { min-width: 0; margin: 0; }
+@media (max-width: 900px) {
+  .compare { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ---------- requirements list ---------- */
+.cmp-side { padding: 14px 14px 10px; }
+.cmp-side h2 { margin-bottom: 0.5rem; }
+.cmp-filters { margin-bottom: 0.6rem; }
+
+/* The list scrolls inside its own panel. The scrollbar sits in a reserved gutter, so it never covers text. */
+.cmp-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 65vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border-top: 1px solid var(--border);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  scrollbar-gutter: stable;
+}
+.cmp-list::-webkit-scrollbar { width: 8px; }
+.cmp-list::-webkit-scrollbar-track { background: transparent; }
+.cmp-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+.cmp-list > li { min-width: 0; }
+
+.cmp-item {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch; /* app.css centres .cmp-item; rows read left to right */
+  gap: 0.4rem;
+  min-width: 0;
+  padding: 0.6rem 0.7rem 0.6rem 0.65rem;
+  border-bottom: 1px solid var(--border);
+  border-left: 3px solid transparent;
+  color: var(--text);
+  text-decoration: none;
+}
+.cmp-item:hover { background: var(--bg); }
+.cmp-item.selected {
+  background: var(--bg);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  border-left-color: var(--accent);
+}
+.cmp-title {
+  display: block;
+  min-width: 0;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.cmp-title .code { color: var(--muted); margin-right: 0.3rem; }
+.cmp-item.selected .cmp-title { font-weight: 600; }
+.cmp-item.selected .cmp-title .code { color: var(--accent); }
+.cmp-param { font-size: 0.92rem; }
+.cmp-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.cmp-chips .badge, .cmp-chips .chip { font-size: 0.75rem; }
+
+/* ---------- requirement panel (right) ---------- */
+.cmp-panel { padding: 14px 16px; overflow-wrap: anywhere; }
+.cmp-panel img { max-width: 100%; height: auto; }
+.cmp-panel .panel-head {
+  align-items: flex-start;
+  margin-bottom: 0;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+.cmp-panel .panel-title { flex: 1 1 260px; min-width: 0; }
+.cmp-panel .panel-head h2 { font-size: 1.1rem; line-height: 1.35; }
+.cmp-panel .panel-badges { gap: 0.3rem; }
+.cmp-panel .panel-badges .badge,
+.cmp-panel .panel-badges .chip { font-size: 0.78rem; }
+
+.cmp-panel .split {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 16px 20px;
+  margin-top: 0;
+  padding: 0.8rem 0;
+}
+.cmp-panel .split + .split { border-top: 1px solid var(--border); }
+.cmp-panel .split > .side { min-width: 0; }
+
+.cmp-panel h3 { font-size: 0.95rem; margin: 0.9rem 0 0.4rem; }
+.cmp-panel .split > .side > h3:first-child { margin-top: 0; }
+.cmp-panel p { margin: 0.3rem 0; }
+.cmp-panel dl.kv { grid-template-columns: minmax(0, max-content) minmax(0, 1fr); }
+.cmp-panel dl.kv dd { overflow-wrap: anywhere; }
+.cmp-panel blockquote { margin: 0.4rem 0; }
+.cmp-panel .cmp-quote { color: var(--text); border-left-color: var(--accent); font-size: 0.92rem; }
+
+/* a source (file and page) is one truncated line; the page sits on its own short line */
+.cmp-panel .src { min-width: 0; margin-bottom: 0.3rem; }
+.cmp-panel .src-name {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.cmp-panel .src-meta {
+  display: block;
+  margin-top: 0.1rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* collapsed sections: the page text, the confidence breakdown, the pages searched */
+.cmp-panel .cmp-details {
+  margin: 0.6rem 0 0;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--border);
+}
+.cmp-panel .cmp-details > summary {
+  cursor: pointer;
+  margin: 0;
+  padding: 0.25rem 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+.cmp-panel .cmp-details > summary:hover { text-decoration: underline; }
+.cmp-panel .cmp-details[open] > summary { margin-bottom: 0.4rem; }
+.cmp-panel .cmp-details .kv { margin: 0.2rem 0 0; }
+.cmp-panel .page-text {
+  max-height: 320px;
+  margin: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  scrollbar-gutter: stable;
+}
+.cmp-panel .searched-list { list-style: none; margin: 0; padding: 0; }
+.cmp-panel .searched-list li {
+  min-width: 0;
+  padding: 0.4rem 0;
+  border-top: 1px solid var(--border);
+}
+.cmp-panel .searched-list li:first-child { border-top: 0; }
+
+/* bid evidence */
+.cmp-panel .evidence { min-width: 0; padding: 0.6rem 0; border-top: 1px solid var(--border); }
+.cmp-panel .evidence:first-of-type { padding-top: 0; border-top: 0; }
+.cmp-panel .evidence .excerpt { font-size: 0.92rem; margin: 0.3rem 0; }
+
+/* the override form ends the right column */
+.cmp-panel .override-form {
+  margin-top: 0.8rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--border);
+}
+.cmp-panel .override-form h3 { margin: 0; }
+.cmp-panel .override-form textarea { width: 100%; }
+
+/* ---------- narrow screens ---------- */
+@media (max-width: 480px) {
+  .cmp-side { padding: 12px; }
+  .cmp-panel { padding: 12px; }
+}

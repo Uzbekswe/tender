@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="{{ lang }}">
+<html lang="{{ lang }}"{% if theme %} data-theme="{{ theme }}"{% endif %}>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -20,16 +20,58 @@
     {% endif %}
     <a href="/" class="switch-role">{{ t('nav.switch_role') }}</a>
   </nav>
-  <div class="lang" aria-label="{{ t('lang.label') }}">
-    <a href="/lang/ru?next={{ next_url|urlencode }}" class="{{ 'on' if lang == 'ru' }}" hreflang="ru">RU</a>
-    <span aria-hidden="true">|</span>
-    <a href="/lang/uz?next={{ next_url|urlencode }}" class="{{ 'on' if lang == 'uz' }}" hreflang="uz">UZ</a>
-    <span aria-hidden="true">|</span>
-    <a href="/lang/en?next={{ next_url|urlencode }}" class="{{ 'on' if lang == 'en' }}" hreflang="en">EN</a>
+  {% set lang_names = [('ru', 'Русский'), ('uz', 'Oʻzbekcha'), ('en', 'English')] %}
+  <div class="topbar-tools">
+    <details class="lang-menu">
+      <summary>
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        <span class="visually-hidden">{{ t('lang.label') }}:</span>
+        <span class="lang-code">{{ lang|upper }}</span>
+        <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6"/></svg>
+      </summary>
+      <ul class="lang-list">
+        {% for code, name in lang_names %}
+        <li>
+          <a href="/lang/{{ code }}?next={{ next_url|urlencode }}" lang="{{ code }}" hreflang="{{ code }}"{% if code == lang %} class="on" aria-current="true"{% endif %}>
+            <span>{{ name }}</span>
+            {% if code == lang %}<svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 6L9 17l-5-5"/></svg>{% endif %}
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+    </details>
+    <button type="button" id="theme-toggle" class="theme-toggle" aria-label="{{ t('theme.toggle') }}" title="{{ t('theme.toggle') }}">
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+    </button>
   </div>
 </header>
 <main class="container">
   {% block content %}{% endblock %}
 </main>
+<script>
+(function () {
+  var root = document.documentElement;
+  var systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+  // The theme button shows the opposite of the theme on screen; the choice is kept in the `theme` cookie.
+  document.getElementById('theme-toggle').addEventListener('click', function () {
+    var shown = root.dataset.theme || (systemDark.matches ? 'dark' : 'light');
+    var next = shown === 'dark' ? 'light' : 'dark';
+    root.dataset.theme = next;
+    document.cookie = 'theme=' + next + '; path=/; max-age=31536000; SameSite=Lax';
+  });
+  // The language menu closes on an outside click or Escape.
+  var menus = document.querySelectorAll('details.lang-menu');
+  document.addEventListener('click', function (e) {
+    menus.forEach(function (m) { if (m.open && !m.contains(e.target)) m.open = false; });
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    menus.forEach(function (m) {
+      if (m.open) { m.open = false; m.querySelector('summary').focus(); }
+    });
+  });
+})();
+</script>
 </body>
 </html>
