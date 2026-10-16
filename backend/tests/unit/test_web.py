@@ -668,7 +668,7 @@ def test_summary_shows_sections_plan_collect_and_downloads(client: TestClient) -
             "Баллы тендера 2–12 из 15 (проходной 11).") in ru.text
     assert f"req={ids['T-001']}" in ru.text
     assert f"/api/v1/runs/{run}/export/xlsx" in ru.text
-    assert f"/api/v1/projects/{ids['project']}/export/clarification.txt" in ru.text
+    assert f"/api/v1/projects/{ids['project']}/export/clarification.docx" in ru.text
     assert client.get(f"/api/v1/runs/{run}/export/xlsx").status_code == 200
 
     _lang(client, "en")

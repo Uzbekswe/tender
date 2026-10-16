@@ -16,20 +16,30 @@
   </article>
 {%- endmacro %}
 
+<link rel="stylesheet" href="{{ asset('print.css') }}" media="print">
 {% if customer %}
-<p><a href="/projects/{{ project_id }}/comparison">{{ t('comparison.back') }}</a></p>
+<p class="no-print"><a href="/projects/{{ project_id }}/comparison">{{ t('comparison.back') }}</a></p>
 {% else %}
-<p><a href="/projects/{{ project_id }}">{{ t('compare.back') }}</a></p>
+<p class="no-print"><a href="/projects/{{ project_id }}">{{ t('compare.back') }}</a></p>
 {% endif %}
-<h1>{{ project_name }}</h1>
+<h1 class="no-print">{{ project_name }}</h1>
 {% include "_run_nav.html" %}
 
-<section class="card sum-head">
+<div class="print-head print-only" hidden>
+  <p class="print-meta">{{ project_name }}</p>
+  <h1 class="print-title">{{ t('customer.summary.print.title') if customer else t('summary.print.title') }}</h1>
+  <p class="print-meta">{{ t('summary.print.date') }}: <span id="print-date"></span></p>
+  {% if customer %}<p class="print-meta">{{ t('committee.advisory') }}</p>{% endif %}
+  <p class="print-verdict">{{ headline or t('compare.not_scored') }}</p>
+</div>
+
+<section class="card sum-head no-print">
   {% if customer %}<p class="muted small">{{ t('committee.advisory') }}</p>{% endif %}
   <p class="sum-headline">{{ headline or t('compare.not_scored') }}</p>
   <div class="sum-downloads">
     <strong>{{ t('summary.downloads') }}</strong>
     <a class="btn" href="{{ xlsx_url }}" download>{{ t('summary.download.xlsx') }}</a>
+    <button type="button" class="btn" onclick="window.print()" title="{{ t('summary.download.pdf_hint') }}">{{ t('summary.download.pdf') }}</button>
     {% if clarification_url %}<a class="btn" href="{{ clarification_url }}" download>{{ t('summary.download.clarification') }}</a>{% endif %}
   </div>
 </section>
@@ -95,4 +105,13 @@
   {% for s in not_provided %}{{ item_line(s) }}{% else %}<p class="muted">{{ t('summary.empty') }}</p>{% endfor %}
 </section>
 {% endif %}
+<script>
+(function () {
+  // The printed header shows today's date, filled in when the page loads and again before printing.
+  var el = document.getElementById('print-date');
+  function fill() { if (el) el.textContent = new Date().toLocaleDateString({{ lang|tojson }}); }
+  fill();
+  window.addEventListener('beforeprint', fill);
+})();
+</script>
 {% endblock %}
