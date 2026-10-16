@@ -61,7 +61,8 @@ class ClaudeCliProvider:
             if _AUTH_PATTERN.search(text):
                 raise ProviderUnavailable(CLI_NOT_LOGGED_IN)
             if returncode == 0:
-                raise LLMError(f"{request.model}: Claude CLI returned no result line")
+                # A clean exit with no answer is a passing CLI hiccup, not a bad request: retry it.
+                raise TransientProviderError(f"{request.model}: Claude CLI returned no result line")
             raise TransientProviderError(f"Claude CLI exited with code {returncode}: {_snippet(text)}")
         return response_from_result(result, request.model)
 
