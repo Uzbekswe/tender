@@ -487,5 +487,6 @@
   "decision.member": "Committee member",
   "decision.text": "Decision and comment",
   "decision.submit": "Record decision",
-  "decision.saved": "Decision recorded in the log."
+  "decision.saved": "Decision recorded in the log.",
+  "run.unfinished": "{count} items were not processed; they are shown as Needs review."
 }

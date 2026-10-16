@@ -487,5 +487,6 @@
   "decision.member": "Komissiya aʼzosi",
   "decision.text": "Qaror va izoh",
   "decision.submit": "Qarorni yozish",
-  "decision.saved": "Qaror jurnalga yozildi."
+  "decision.saved": "Qaror jurnalga yozildi.",
+  "run.unfinished": "Ishlanmagan bandlar: {count}. Ular «Tekshirish kerak» deb koʻrsatilgan."
 }
