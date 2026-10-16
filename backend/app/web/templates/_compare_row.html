@@ -1,13 +1,14 @@
-{# One line of the requirements list. Clicking it loads the panel with HTMX; the href is the no-JS fallback.
+{# One line of the requirements list: code and name, then the type and status chips. Confidence is shown in the
+   panel, not here. Clicking the row loads the panel with HTMX; the href is the no-JS fallback.
    Swapped out of band after an override, so it must keep the same id. #}
 <li id="cmp-row-{{ row.id }}" hx-swap-oob="true">
   <a class="cmp-item{% if row.selected %} selected{% endif %}" href="{{ row.href }}"
      hx-get="/runs/{{ run_id }}/compare/items/{{ row.id }}" hx-target="#compare-panel" hx-swap="outerHTML"
-     data-req="{{ row.id }}">
-    <span class="code">{{ row.code }}</span>
-    <span class="badge badge-type-{{ row.type }}">{{ t('req_type.' ~ row.type) }}</span>
-    <span class="chip status-{{ row.status }}">{{ row.status_label }}</span>
-    <span class="cmp-conf muted small" aria-label="{{ t('common.confidence') }}">{{ t('common.confidence') }} {{ row.confidence }}</span>
-    <span class="cmp-param">{{ row.parameter }}</span>
+     data-req="{{ row.id }}"{% if row.selected %} aria-current="true"{% endif %}>
+    <span class="cmp-title"><span class="code">{{ row.code }}</span> <span class="cmp-param">{{ row.parameter }}</span></span>
+    <span class="cmp-chips">
+      <span class="badge badge-type-{{ row.type }}">{{ t('req_type.' ~ row.type) }}</span>
+      <span class="chip status-{{ row.status }}">{{ row.status_label }}</span>
+    </span>
   </a>
 </li>

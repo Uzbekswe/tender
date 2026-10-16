@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% block title %}{{ t('compare.title') }} · {{ project_name }}{% endblock %}
 {% block content %}
+{# base.html has no head block for page styles, so the comparison stylesheet is linked here. #}
+<link rel="stylesheet" href="/static/compare.css">
 {% if customer %}
 <p><a href="/projects/{{ project_id }}/comparison">{{ t('comparison.back') }}</a></p>
 {% else %}
@@ -96,7 +98,10 @@
     if (!panel) return;
     var id = panel.getAttribute('data-req');
     document.querySelectorAll('.cmp-item').forEach(function (a) {
-      a.classList.toggle('selected', a.getAttribute('data-req') === id);
+      var on = a.getAttribute('data-req') === id;
+      a.classList.toggle('selected', on);
+      if (on) a.setAttribute('aria-current', 'true');
+      else a.removeAttribute('aria-current');
     });
   });
 })();
