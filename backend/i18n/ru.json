@@ -317,8 +317,8 @@
   "platform.state.confirmed": "Подтверждено на площадке",
   "platform.state.pending": "Не подтверждено",
   "summary.title": "Итог",
-  "summary.headline": "{verdict}: {overall}%, {points} из {stated} баллов (проходной {pass_mark}), критичных проблем: {critical}.",
-  "summary.headline_no_points": "{verdict}: {overall}%, критичных проблем: {critical}.",
+  "summary.headline": "{verdict}. Обязательных пунктов исправить: {critical}. Соответствие {overall}%. Баллы тендера {points} из {stated} (проходной {pass_mark}).",
+  "summary.headline_no_points": "{verdict}. Обязательных пунктов исправить: {critical}. Соответствие {overall}%.",
   "summary.headline.platform.one": "{n} пункт проверяется на площадке.",
   "summary.headline.platform.few": "{n} пункта проверяются на площадке.",
   "summary.headline.platform.many": "{n} пунктов проверяются на площадке.",
@@ -494,5 +494,6 @@
   "box.hint.tender": "Этот файл похож на заявку, а не на документацию заказчика: {files}.",
   "box.hint.bid": "Этот файл похож на тендерную документацию, а не на заявку: {files}.",
   "box.run_anyway": "Всё равно запустить",
-  "project.docs.remove": "Удалить файл"
+  "project.docs.remove": "Удалить файл",
+  "checklist.approve_with_suggestions": "Применить предложения ({n}) и утвердить"
 }
