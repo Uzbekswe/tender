@@ -158,6 +158,26 @@ def _num(text: str | None) -> float | None:
     return float(tokens[0].canon)
 
 
+_DATE_NOT_BEFORE = re.compile(r"не\s+ранее|not\s+earlier\s+than|no\s+earlier\s+than|dan\s+oldin\s+emas|on\s+or\s+after", re.I)
+_DATE_NOT_AFTER = re.compile(r"не\s+позднее|not\s+later\s+than|no\s+later\s+than|kechiktirmay|on\s+or\s+before", re.I)
+_DATE_IN_TEXT = re.compile(r"\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|\d{4}-\d{2}-\d{2}")
+
+
+def _date_condition(value: str | None) -> tuple[str, Any] | None:
+    """(">=" or "<=", date) when the requirement's value is a date bound such as "не ранее 30.11.2026"."""
+    if not value:
+        return None
+    found = _DATE_IN_TEXT.search(value)
+    limit = parse_date(found.group(0)) if found else None
+    if limit is None:
+        return None
+    if _DATE_NOT_BEFORE.search(value):
+        return ">=", limit
+    if _DATE_NOT_AFTER.search(value):
+        return "<=", limit
+    return None
+
+
 def _doc_number(doc_ref: str | None) -> int | None:
     match = _NUMBER_RE.search(doc_ref or "")
     return int(match.group(1)) if match else None
@@ -212,10 +232,16 @@ class _Row:
     summary: str
     keywords: tuple[str, ...]
     entities: list[dict]
+    doc_ordinal: int = 0      # position of the document in the bid package; 0 = use the document id
+
+    @property
+    def doc_key(self) -> int:
+        """The number the prompts call this document by ("DOC-02"), and the model answers with."""
+        return self.doc_ordinal or self.document_id
 
     @property
     def label(self) -> str:
-        return reading._label(self.document_id, self.number)
+        return reading._label(self.document_id, self.number, self.doc_key)
 
 
 @dataclass
@@ -229,7 +255,7 @@ class _Bid:
     rows: list[_Row]                      # every page, in (document, number) order
     usable: list[_Row]
     unread: int                           # non-duplicate pages not readable or not read yet
-    doc_pages: dict[int, dict[int, _Row]]  # document id -> number -> row, duplicates included
+    doc_pages: dict[int, dict[int, _Row]]  # doc_key ("DOC-02" -> 2) -> number -> row, duplicates included
     by_id: dict[int, _Row]                # usable pages by id
 
 
@@ -255,6 +281,7 @@ def _load_bid(package_id: int) -> _Bid:
                 .where(Document.package_id == package_id)
             ).all()
         }
+        ordinal = {doc_id: i for i, doc_id in enumerate(sorted(docs), start=1)}
         rows: list[_Row] = []
         for page in pages:
             card = cards.get(page.id)
@@ -277,11 +304,12 @@ def _load_bid(package_id: int) -> _Bid:
                 summary=(card.summary_ru or "") if card else "",
                 keywords=tuple(card.keywords or []) if card else (),
                 entities=list(card.entities or []) if card else [],
+                doc_ordinal=ordinal[page.document_id],
             ))
 
     doc_pages: dict[int, dict[int, _Row]] = {}
     for row in rows:
-        doc_pages.setdefault(row.document_id, {})[row.number] = row
+        doc_pages.setdefault(row.doc_key, {})[row.number] = row
     usable = [row for row in rows if row.usable]
     return _Bid(
         project_id=package.project_id,
@@ -874,7 +902,10 @@ def _verify_item(ev: EvidenceOut, bid: _Bid, req: _Req) -> _Found | None:
         page_corrected=result.page_corrected,
         # A declaration is the bidder's own statement: a verified statement by the bidder is what the
         # tender asks for, on whatever page it stands. Page types vary between runs; this must not.
-        from_confirming=(declaration or not req.evidence_doc_types or row.doc_type in req.evidence_doc_types),
+        # evidence_doc_types is the extraction model's guess; only a document the tender itself names
+        # (confirmation_method) restricts which proof document counts.
+        from_confirming=(declaration or not req.evidence_doc_types or not (req.confirmation_method or "").strip()
+                         or row.doc_type in req.evidence_doc_types),
         subject_is_bidder=_subject_is_bidder(ev.subject, ev.subject_stir, bid),
         doc_type=row.doc_type,
         is_proof=declaration or verdict.is_proof_item(row.doc_type, declaration=declaration),
@@ -996,6 +1027,20 @@ def _assess_one(final: _Final, plan: _Plan) -> _Checked:
         if f.value_num is None and f.ev.value:
             parsed = parse_value(f.ev.value)
             f.value_num, f.value_unit = parsed.value, parsed.unit
+    # Date conditions ("не ранее 30.11.2026", "not later than …"): compared by code with the date the
+    # bid gives (e.g. a certificate's issue date), never left to the model's reading.
+    date_rule = _date_condition(req.value) if not numeric_decided else None
+    if date_rule is not None:
+        op, limit = date_rule
+        for f in usable:
+            got = parse_date(f.ev.value or "") if f.ev.value else None
+            if got is None:
+                continue
+            f.numeric = "ok" if (got >= limit if op == ">=" else got <= limit) else "fail"
+            numeric_decided = True
+        if numeric_decided:
+            dated_ok = all(f.numeric == "ok" for f in usable if f.numeric)
+            judgement = SATISFIES if dated_ok else CONTRADICTS
     outcomes = {f.numeric for f in usable if f.numeric}
     if "fail" in outcomes:
         reasons.add(verdict.VALUE_FAIL)

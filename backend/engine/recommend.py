@@ -472,13 +472,16 @@ def _route(req: ReqView, status: str, reasons: Sequence[str]) -> tuple[str, str]
         return "NEEDS_REVIEW", CHECK_MANUALLY
 
     goods = req.scope == "goods"
+    # An expired document is fixed by attaching a valid one, even when the model also called it a wrong value.
+    if EXPIRED in reasons:
+        return EXPIRED, ADD_DOCUMENT
     if key == VALUE_FAIL:
         if goods:
             return "VALUE_FAIL_GOODS", REPLACE_GOODS
         # A text condition failed by the model's reading (no number compared) is usually data that
         # differs between the bid's own documents, e.g. a date in a form vs the registry extract:
         # the bidder can correct it. Only a measured value below the requirement is not fixable.
-        if CONTRADICTION in reasons or req.operator == "text":
+        if CONTRADICTION in reasons or req.operator not in ("<", "<=", ">", ">=", "=", "range"):
             return "VALUE_FAIL_CONFLICT", CORRECT_DATA
         return "VALUE_FAIL_BIDDER", NOT_FIXABLE
     if key == CONTRADICTION:

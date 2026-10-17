@@ -276,3 +276,10 @@ def test_a_failed_text_condition_is_correctable_data_not_a_lost_cause():
     rec = recommend(req, "does_not_meet", ["VALUE_FAIL"], _evidence(), "ru")
     assert rec.action_type == CORRECT_DATA
     assert "нельзя выполнить" not in rec.action
+
+
+def test_an_expired_document_is_renewed_not_given_up():
+    req = _req(scope="bidder", operator="exists", value=None, unit=None)
+    rec = recommend(req, "does_not_meet", ["EXPIRED", "VALUE_FAIL"], _evidence(), "ru")
+    assert rec.action_type == ADD_DOCUMENT
+    assert "нельзя выполнить" not in rec.action

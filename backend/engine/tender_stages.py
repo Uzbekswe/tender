@@ -1114,6 +1114,10 @@ MANUFACTURER_FORM_RE = re.compile(
 )
 SERVICE_WORDS_RE = re.compile(r"услуг|работ|xizmat|(?<!\w)ish(?!\w)|service", re.IGNORECASE)
 GOODS_WORDS_RE = re.compile(r"товар|поставк|mahsulot|tovar|goods", re.IGNORECASE)
+TENDER_SIDE_DOC_TYPES = frozenset({"tender_documentation", "evaluation_criteria"})
+# Penalty and fine clauses: set by the customer and accepted by submitting the bid.
+PENALTY_RE = re.compile(r"\bпен[ия]\b|пеня|неустойк|\bштраф|jarima|penya|\bpenalt", re.IGNORECASE)
+
 RULE_WHY = {
     "pass_mark": {
         "ru": "Проходной балл проверяется как баллы тендера, а не как условие к заявке.",
@@ -1124,6 +1128,11 @@ RULE_WHY = {
         "ru": "Противоречит {other}; идёт в письмо на разъяснение.",
         "en": "Contradicts {other}; goes to the clarification letter.",
         "uz": "{other} bilan ziddiyat; tushuntirish soʻrovi xatiga kiradi.",
+    },
+    "customer_term": {
+        "ru": "Условие договора, которое задаёт заказчик; участник принимает его подачей заявки.",
+        "en": "A contract term set by the customer; the bidder accepts it by submitting the bid.",
+        "uz": "Buyurtmachi belgilagan shartnoma sharti; ishtirokchi uni taklif topshirish bilan qabul qiladi.",
     },
     "services_form": {
         "ru": "Форма для товара в тендере на услуги.",
@@ -1209,6 +1218,13 @@ def _consolidate_inputs(run_id: int, package_id: int) -> dict[str, Any]:
             }
             for r in reqs
         ]
+        # Customer-imposed contract terms (penalties, payment schedule by the customer…): the tender names no
+        # confirming document and the only document that "confirms" them is the tender itself.
+        customer_terms = sorted(
+            r.code for r in reqs
+            if r.evidence_doc_types and set(r.evidence_doc_types) <= TENDER_SIDE_DOC_TYPES
+            and not (r.confirmation_method or "").strip()
+        )
         subject = project.subject if project is not None else None
         has_pass_threshold = session.exec(
             select(EvaluationScheme.id).where(
@@ -1232,6 +1248,7 @@ def _consolidate_inputs(run_id: int, package_id: int) -> dict[str, Any]:
         "platform_codes": platform_codes,  # not sent to the model: they get no suggestion
         "has_pass_threshold": has_pass_threshold,  # for the pass-mark rule (not sent to the model)
         "contradictions": contradictions,  # for the contradiction rule (not sent to the model)
+        "customer_terms": customer_terms,  # for the customer-term rule (not sent to the model)
     }
 
 
@@ -1247,6 +1264,7 @@ def _consolidation_of(payload: dict | None) -> ConsolidationOut | None:
 def _validated_suggestions(
     items: list[ConsolidationItem], rows: list[dict], platform_codes: frozenset[str] = frozenset(), *,
     report_lang: str = "ru", has_pass_threshold: bool = False, contradictions: Sequence[Sequence[str]] = (),
+    customer_terms: Sequence[str] = (),
 ) -> dict[str, dict]:
     """Checks the model's answer in code. Returns one suggestion per analysed code, in code order.
 
@@ -1319,13 +1337,15 @@ def _validated_suggestions(
             "why": why, "type_fix": type_fix, "platform_check": platform, "note": note,
         }
     _apply_rules(result, by_code, platform_codes, report_lang=report_lang,
-                 has_pass_threshold=has_pass_threshold, contradictions=contradictions)
+                 has_pass_threshold=has_pass_threshold, contradictions=contradictions,
+                 customer_terms=frozenset(customer_terms))
     return result
 
 
 def _apply_rules(
     result: dict[str, dict], by_code: dict[str, dict], platform_codes: frozenset[str], *,
     report_lang: str, has_pass_threshold: bool, contradictions: Sequence[Sequence[str]],
+    customer_terms: frozenset[str] = frozenset(),
 ) -> None:
     """The deterministic consolidation rules (see _validated_suggestions). Changes `result` in place."""
     lang = report_lang if report_lang in ("ru", "uz", "en") else "ru"
@@ -1336,6 +1356,9 @@ def _apply_rules(
         text_row = by_code[code]
         if has_pass_threshold and PASS_MARK_RE.search(_row_text(text_row)):
             _suggest_exclusion(suggestion, "TENDER_FACT", RULE_WHY["pass_mark"][lang], "rule: pass mark of the tender")
+        elif code in customer_terms or PENALTY_RE.search(_row_text(text_row)):
+            _suggest_exclusion(suggestion, "POST_AWARD", RULE_WHY["customer_term"][lang],
+                               "rule: contract term set by the customer")
         elif services and MANUFACTURER_FORM_RE.search(_row_text(text_row)):
             _suggest_exclusion(suggestion, "POST_AWARD", RULE_WHY["services_form"][lang],
                                "rule: manufacturer's form in a services tender")
@@ -1394,6 +1417,7 @@ async def stage_consolidate(run_id: int, ctx: RunContext) -> None:
     suggestions = _validated_suggestions(
         answer.items, rows, frozenset(data["platform_codes"]), report_lang=data["report_lang"],
         has_pass_threshold=data["has_pass_threshold"], contradictions=data["contradictions"],
+        customer_terms=data.get("customer_terms", ()),
     )
     await asyncio.to_thread(_set_stage_progress, run_id, CONSOLIDATE_STAGE, 1, 1, 0, suggestions=suggestions)
 
