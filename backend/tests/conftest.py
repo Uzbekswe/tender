@@ -21,6 +21,9 @@ def data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     root = tmp_path / "data"
     monkeypatch.setenv("DATA_DIR", str(root))
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'test.db'}")
+    # A developer's backend/.env may set the access gate; tests start with it off (test_access turns it on).
+    monkeypatch.setenv("ACCESS_PASSWORD", "")
+    monkeypatch.setenv("DEMO_PUBLIC", "false")
     get_settings.cache_clear()
     db.reset_engine()
     yield root

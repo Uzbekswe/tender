@@ -1,0 +1,23 @@
+# Render blueprint (prepared, not deployed). Create it from the repo: Render dashboard > New > Blueprint.
+# The disk needs a paid plan. Secrets are entered in the dashboard, never in this file.
+services:
+  - type: web
+    name: tender-sverka
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /health
+    disk:
+      name: tender-data
+      mountPath: /data
+      sizeGB: 5
+    envVars:
+      - key: LLM_PROVIDER
+        value: anthropic_api
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ACCESS_PASSWORD
+        sync: false
+      - key: DEMO_PUBLIC
+        value: "1"

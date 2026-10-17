@@ -17,12 +17,12 @@
   {% if s.why %}<div class="muted small suggest-why">{{ s.why }}</div>{% endif %}
   {% if kind %}
     {% if draft %}
-      <form method="post" action="/projects/{{ pid }}/checklist/requirements/{{ req.id }}/apply-suggestion"
+      {% if not demo %}<form method="post" action="/projects/{{ pid }}/checklist/requirements/{{ req.id }}/apply-suggestion"
             hx-post="/projects/{{ pid }}/checklist/requirements/{{ req.id }}/apply-suggestion"
             hx-include="#checklist-filters" hx-target="#checklist-main" hx-swap="outerHTML"
             class="inline-form">
         <button type="submit" class="btn small">{{ t('checklist.suggest.apply') }}</button>
-      </form>
+      </form>{% endif %}
     {% else %}
       <span class="muted small">{{ t('checklist.suggest.readonly') }}</span>
     {% endif %}

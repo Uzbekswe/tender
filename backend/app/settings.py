@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     prompts_dir: Path = BACKEND_DIR / "prompts"
     render_dpi: int = 150  # page PNGs for the viewer
     vision_dpi: int = 200  # page PNGs sent to the vision model
+    # Access gate (app/web/auth.py). Empty password = no gate, the app is open as before.
+    access_password: str = ""
+    demo_public: bool = False  # with the gate on: start page, demo projects and demo sample download stay open
+    session_secret: str = ""  # signs the login cookie; empty = derived from access_password
 
     @property
     def db_url(self) -> str:

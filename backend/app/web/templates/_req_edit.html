@@ -1,7 +1,7 @@
 {# One requirement in edit mode: type, parameter, value, excluded. Saved with HTMX as a row swap. #}
 <tr id="req-{{ req.id }}" class="editing">
   <td colspan="10">
-    <form method="post" action="/projects/{{ pid }}/checklist/requirements/{{ req.id }}"
+    {% if not demo %}<form method="post" action="/projects/{{ pid }}/checklist/requirements/{{ req.id }}"
           hx-post="/projects/{{ pid }}/checklist/requirements/{{ req.id }}"
           hx-target="#req-{{ req.id }}" hx-swap="outerHTML"
           class="edit-form">
@@ -38,6 +38,6 @@
            hx-get="/projects/{{ pid }}/checklist/requirements/{{ req.id }}/row"
            hx-target="#req-{{ req.id }}" hx-swap="outerHTML">{{ t('common.cancel') }}</a>
       </div>
-    </form>
+    </form>{% endif %}
   </td>
 </tr>

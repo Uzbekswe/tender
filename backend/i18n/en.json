@@ -512,5 +512,19 @@
   "clarification.date": "Date: {date}",
   "clarification.no_questions": "No clarification questions were identified for this project.",
   "clarification.closing": "Sincerely,",
-  "clarification.signature": "_______________________ (signature, full name, position)"
+  "clarification.signature": "_______________________ (signature, full name, position)",
+  "login.title": "Sign in",
+  "login.lead": "Enter the access password to open the app.",
+  "login.password": "Password",
+  "login.submit": "Sign in",
+  "login.error": "Wrong password.",
+  "login.locked": "Too many attempts. Wait a minute and try again.",
+  "login.demo_note": "Demo projects open without a password: go back to the start page and pick a demo.",
+  "login.home": "Start page",
+  "demo.title": "Try it without your own documents",
+  "demo.note": "A real check on sample documents. The AI answers are pre-recorded, so it is free and takes about a minute.",
+  "demo.open_supplier": "Open supplier demo",
+  "demo.open_customer": "Open customer demo",
+  "demo.download": "Download sample documents (.zip)",
+  "demo.readonly": "This is a demo project: it cannot be changed. Create your own project to try changes."
 }

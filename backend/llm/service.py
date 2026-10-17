@@ -276,7 +276,7 @@ class DefaultLLMClient:
             model_requested=model,
             model_answered=response.model_answered,
             prompt_version=version,
-            request=_request_log(messages, model, temperature, schema.__name__),
+            request=_request_log(messages, model, temperature, schema.__name__, effort),
             response=response.text,
             tokens_in=response.tokens_in,
             tokens_out=response.tokens_out,
@@ -372,19 +372,27 @@ def _next_in(order: Sequence[str], enabled: bool, tier: str) -> str | None:
     return order[index + 1] if index + 1 < len(order) else None
 
 
+def provider_name() -> str:
+    """The provider this install uses: LLM_PROVIDER (env wins), else models.toml `provider`, else claude_cli.
+    It is part of every cache key (engine.demo re-keys the replayed demo answers with it)."""
+    settings = app_settings.get_settings()
+    config = app_settings.load_toml(settings.models_config)
+    return (settings.llm_provider or config.get("provider") or "claude_cli").strip()
+
+
 def get_llm_client(session_factory: Callable[[], Session]) -> DefaultLLMClient:
     """Build the client from settings (env wins) and models.toml."""
     settings = app_settings.get_settings()
     config = app_settings.load_toml(settings.models_config)
-    provider_name = (settings.llm_provider or config.get("provider") or "claude_cli").strip()
+    name = provider_name()
     limits_data = dict(config.get("limits", {}))
     if settings.llm_concurrency > 0:
         limits_data["parallel_calls"] = settings.llm_concurrency
     escalation = config.get("escalation", {})
     return DefaultLLMClient(
         session_factory,
-        get_provider(provider_name),
-        provider_name=provider_name,
+        get_provider(name),
+        provider_name=name,
         tasks=config.get("tasks", {}),
         prompt_versions=config.get("prompt_versions", {}),
         limits=LLMLimits.from_dict(limits_data),
@@ -400,9 +408,11 @@ def image_hash(image: ImageInput) -> str:
     return hashlib.sha256(image.png_bytes).hexdigest()
 
 
-def _request_log(messages: list[ChatMessage], model: str, temperature: float, schema_name: str) -> dict:
-    """Request as stored in LlmCall.request: images replaced by their hashes."""
-    return {
+def _request_log(messages: list[ChatMessage], model: str, temperature: float, schema_name: str,
+                 effort: str | None = None) -> dict:
+    """Request as stored in LlmCall.request: images replaced by their hashes. Every input of the cache
+    key is here (engine.demo recomputes the key from it), so `effort` is kept when it is set."""
+    log: dict = {
         "model": model,
         "temperature": temperature,
         "schema": schema_name,
@@ -415,6 +425,9 @@ def _request_log(messages: list[ChatMessage], model: str, temperature: float, sc
             for m in messages
         ],
     }
+    if effort:
+        log["effort"] = effort
+    return log
 
 
 def _combine_meta(

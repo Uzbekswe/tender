@@ -74,7 +74,7 @@
     {% else %}
       <p class="muted small">{{ t('decision.empty') }}</p>
     {% endif %}
-    <form method="post" action="{{ decision.action }}" class="decision-form">
+    {% if not demo %}<form method="post" action="{{ decision.action }}" class="decision-form">
       <input type="hidden" name="next" value="{{ decision.next }}">
       <label>{{ t('decision.member') }}
         <input type="text" name="member_name" required maxlength="200">
@@ -83,7 +83,7 @@
         <textarea name="text" required maxlength="4000" rows="3"></textarea>
       </label>
       <div><button type="submit" class="btn primary small">{{ t('decision.submit') }}</button></div>
-    </form>
+    </form>{% endif %}
   </section>
   {% endif %}
 {% else %}

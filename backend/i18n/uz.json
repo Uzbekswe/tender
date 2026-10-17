@@ -512,5 +512,19 @@
   "clarification.date": "Sana: {date}",
   "clarification.no_questions": "Ushbu loyiha boʻyicha tushuntirish soʻrovlari aniqlanmadi.",
   "clarification.closing": "Hurmat bilan,",
-  "clarification.signature": "_______________________ (imzo, F.I.Sh., lavozim)"
+  "clarification.signature": "_______________________ (imzo, F.I.Sh., lavozim)",
+  "login.title": "Kirish",
+  "login.lead": "Ilovani ochish uchun kirish parolini kiriting.",
+  "login.password": "Parol",
+  "login.submit": "Kirish",
+  "login.error": "Parol notoʻgʻri.",
+  "login.locked": "Juda koʻp urinish. Bir daqiqa kutib, qayta urinib koʻring.",
+  "login.demo_note": "Demo loyihalar parolsiz ochiq: bosh sahifaga qaytib, demoni tanlang.",
+  "login.home": "Bosh sahifa",
+  "demo.title": "Oʻz hujjatlaringizsiz sinab koʻring",
+  "demo.note": "Bu namuna hujjatlarda haqiqiy tekshiruv. AI javoblari oldindan yozib qoʻyilgan, shuning uchun demo bepul va taxminan bir daqiqa davom etadi.",
+  "demo.open_supplier": "Yetkazib beruvchi demosini ochish",
+  "demo.open_customer": "Buyurtmachi demosini ochish",
+  "demo.download": "Namuna hujjatlarni yuklab olish (.zip)",
+  "demo.readonly": "Bu demo loyiha: uni oʻzgartirib boʻlmaydi. Oʻzgartirishlarni sinab koʻrish uchun oʻz loyihangizni yarating."
 }

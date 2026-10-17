@@ -132,7 +132,7 @@
         </p>
       {% endif %}
 
-      <form class="override-form" method="post"
+      {% if not demo %}<form class="override-form" method="post"
             action="/runs/{{ run_id }}/compare/items/{{ d.id }}/override"
             hx-post="/runs/{{ run_id }}/compare/items/{{ d.id }}/override"
             hx-target="#compare-panel" hx-swap="outerHTML">
@@ -146,7 +146,7 @@
           <textarea name="comment" rows="3" maxlength="2000" required></textarea>
         </label>
         <div><button type="submit" class="btn primary">{{ t('compare.override.submit') }}</button></div>
-      </form>
+      </form>{% endif %}
     </section>
   </div>
   {% endif %}

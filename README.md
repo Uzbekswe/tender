@@ -55,6 +55,40 @@ Open http://localhost:8010. Keep the terminal open while you use the app; Ctrl+C
 2. Add each bidder (name, optional tax ID) and upload its files.
 3. Press **Check all bidders**, then open **Comparison**: a preliminary ranking and a requirement-by-bidder matrix with filters. Click any cell for the evidence. Export the matrix to XLSX.
 
+## Share a link (quick, from your Mac)
+
+Use this to let a colleague try the app in a browser, without installing anything.
+
+1. Install the tunnel tool once: `brew install cloudflared`.
+2. In `backend/.env`, set a password and turn on the public demo:
+
+   ```
+   ACCESS_PASSWORD=choose-a-long-password
+   DEMO_PUBLIC=1
+   ```
+
+   Visitors must enter the password to create projects. The demo projects stay open without it.
+3. Start the app and keep this terminal open: `cd backend && uv run uvicorn app.main:app --port 8010`. Restart it after you change `.env`.
+4. In a second terminal run `cd backend && bash scripts/share.sh`. It prints a link that starts with `https://` and ends in `trycloudflare.com`.
+5. Send that link. It works while your Mac, the app and the script are running. Press Ctrl+C to stop. The link changes each time you run the script.
+
+If you do not set `ACCESS_PASSWORD`, the script warns you: anyone with the link can create projects and use your AI quota.
+
+## Deploy (always-on link)
+
+To keep the link working when your Mac is off, run the app on [Render](https://render.com). The repo has a `Dockerfile` and a `render.yaml` for this. Nothing is deployed yet.
+
+1. Push the repo to GitHub. Render reads the blueprint from there.
+2. In the Render dashboard, choose **New > Blueprint** and select the repo. Render reads `render.yaml`.
+3. Enter two values when Render asks: `ANTHROPIC_API_KEY` (your Anthropic API key) and `ACCESS_PASSWORD` (a long password you choose). They stay in Render. Never put them in the repo.
+4. Wait for the first build, then open the address Render shows. The health check is `/health`.
+
+Costs and privacy:
+
+- Render charges for the web service and the disk. The disk needs a paid plan. Check the current prices at render.com.
+- Real checks use your Anthropic API credit. Demo projects replay recorded answers, so they cost nothing.
+- Uploaded files are stored on Render's disk, at `/data`. A real tender or bid would sit on Render's servers. Use the sample documents, or check that this is acceptable for your data first.
+
 ## Tests
 
 ```bash
