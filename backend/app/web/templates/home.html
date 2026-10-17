@@ -13,4 +13,17 @@
     <span class="muted small">{{ t('home.customer.hint') }}</span>
   </a>
 </div>
+<section class="card demo-block" aria-labelledby="demo-title">
+  <h2 id="demo-title">{{ t('demo.title') }}</h2>
+  <p class="muted">{{ t('demo.note') }}</p>
+  <div class="actions">
+    <form method="post" action="/demo/supplier" class="inline-form">
+      <button type="submit" class="btn primary">{{ t('demo.open_supplier') }}</button>
+    </form>
+    <form method="post" action="/demo/customer" class="inline-form">
+      <button type="submit" class="btn primary">{{ t('demo.open_customer') }}</button>
+    </form>
+    <a class="btn" href="/demo/samples.zip">{{ t('demo.download') }}</a>
+  </div>
+</section>
 {% endblock %}

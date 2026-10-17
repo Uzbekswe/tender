@@ -14,20 +14,20 @@
   <section class="card status-row">
     {% if version.status == 'approved' %}
       <span class="badge badge-approved">{{ t('checklist.version.approved', n=version.number) }}</span>
-      <form method="post" action="/projects/{{ pid }}/checklist/new-version" class="inline-form">
+      {% if not demo %}<form method="post" action="/projects/{{ pid }}/checklist/new-version" class="inline-form">
         <button type="submit" class="btn">{{ t('checklist.new_version') }}</button>
-      </form>
+      </form>{% endif %}
       <span class="muted small">{{ t('checklist.new_version_hint') }}</span>
     {% else %}
       <span class="badge badge-draft">{{ t('checklist.version.draft', n=version.number) }}</span>
-      <form method="post" action="/projects/{{ pid }}/checklist/approve" class="inline-form">
+      {% if not demo %}<form method="post" action="/projects/{{ pid }}/checklist/approve" class="inline-form">
         <button type="submit" class="btn primary">{% if sug_total %}{{ t('checklist.approve_with_suggestions', n=sug_total) }}{% else %}{{ t('checklist.approve') }}{% endif %}</button>
-      </form>
-      <form method="post" action="/projects/{{ pid }}/checklist/apply-suggestions" class="inline-form"
+      </form>{% endif %}
+      {% if not demo %}<form method="post" action="/projects/{{ pid }}/checklist/apply-suggestions" class="inline-form"
             hx-post="/projects/{{ pid }}/checklist/apply-suggestions"
             hx-include="#checklist-filters" hx-target="#checklist-main" hx-swap="outerHTML">
         <button type="submit" class="btn" {% if sug_total == 0 %}disabled{% endif %}>{{ t('checklist.suggest.apply_all', n=sug_total) }}</button>
-      </form>
+      </form>{% endif %}
     {% endif %}
     {% if sug_total and not draft %}<span class="muted small">{{ t('checklist.suggest.readonly') }}</span>{% endif %}
     <span class="muted small">{{ t('checklist.count', total=checklist.counts.total, mandatory=checklist.counts.mandatory, scored=checklist.counts.scored, desirable=checklist.counts.desirable, excluded=checklist.counts.excluded) }}{% if checklist.counts.platform %}{{ t('checklist.count.platform', n=checklist.counts.platform) }}{% endif %}</span>
@@ -64,10 +64,10 @@
     <button type="submit" class="btn">{{ t('checklist.filter.apply') }}</button>
   </form>
 
-  <form id="merge-form" method="post" action="/projects/{{ pid }}/checklist/merge" class="inline-form merge-bar">
+  {% if not demo %}<form id="merge-form" method="post" action="/projects/{{ pid }}/checklist/merge" class="inline-form merge-bar">
     <button type="submit" class="btn">{{ t('checklist.merge') }}</button>
     <span class="muted small">{{ t('checklist.merge_hint') }}</span>
-  </form>
+  </form>{% endif %}
 
   <div class="table-wrap">
   <table class="data checklist">

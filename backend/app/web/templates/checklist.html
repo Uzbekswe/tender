@@ -10,7 +10,7 @@
 {% if checklist %}
   <details class="card">
     <summary><strong>{{ t('checklist.add.title') }}</strong></summary>
-    <form method="post" action="/projects/{{ pid }}/checklist/requirements" class="form-grid">
+    {% if not demo %}<form method="post" action="/projects/{{ pid }}/checklist/requirements" class="form-grid">
       <label>{{ t('checklist.field.scope') }}
         <select name="scope">
           {% for s in ['goods', 'bidder'] %}<option value="{{ s }}">{{ t('checklist.scope.' ~ s) }}</option>{% endfor %}
@@ -53,7 +53,7 @@
       <div class="form-actions">
         <button type="submit" class="btn primary">{{ t('checklist.add.submit') }}</button>
       </div>
-    </form>
+    </form>{% endif %}
   </details>
 
   <section class="card">

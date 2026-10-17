@@ -70,6 +70,7 @@ from app.schemas_results import ItemOut, OverrideIn, ResultsOut
 from app.storage import FileStore, get_store
 from app.web.i18n import LANG_COOKIE, Translator, pick_lang, translator
 from app.settings import get_settings
+from engine import demo
 from engine.box_check import misplaced
 from engine.cards import DOC_TYPES
 from engine.comparison import (
@@ -147,6 +148,7 @@ def _render(request: Request, name: str, *, status_code: int = 200, **ctx: Any) 
     ctx.setdefault("active", "projects")
     ctx.update(lang=lang, t=translator(lang), next_url=_current_path(request), theme=_theme(request))
     ctx.update(_top_nav(ctx))
+    ctx.setdefault("demo", _demo_of_ctx(ctx))
     return templates.TemplateResponse(request, name, ctx, status_code=status_code)
 
 
@@ -175,6 +177,34 @@ def _top_nav(ctx: dict[str, Any]) -> dict[str, Any]:
 
 def _redirect(url: str) -> RedirectResponse:
     return RedirectResponse(url, status_code=303)
+
+
+def _project_of_run(session: Session, run_id: int) -> Project | None:
+    run = session.get(Run, run_id)
+    package = session.get(Package, run.package_id) if run is not None else None
+    return session.get(Project, package.project_id) if package is not None else None
+
+
+def _demo_of_ctx(ctx: dict[str, Any]) -> bool:
+    """True when the page shows a demo project (read-only): the page's project, or the project of its run."""
+    project = ctx.get("project")
+    if isinstance(project, Project):
+        return demo.is_demo(project)
+    with session_scope() as session:
+        project_id = ctx.get("project_id") or ctx.get("pid")
+        if project_id is not None:
+            return demo.is_demo(session.get(Project, int(project_id)))
+        run_id = ctx.get("run_id")
+        if run_id is not None:
+            return demo.is_demo(_project_of_run(session, int(run_id)))
+    return False
+
+
+def _refuse_demo(request: Request, back: str) -> Response:
+    """A demo project is read-only: the change is not made. The page shows why (base.html banner)."""
+    if _is_htmx(request):
+        return Response(status_code=200, headers={"HX-Redirect": back})
+    return _redirect(back)
 
 
 def _error_text(tr: Translator, exc: Exception) -> str:
@@ -295,6 +325,23 @@ def _misplaced_files(session: Session, package: Package) -> list[str]:
         if misplaced(d.file_name, root / rel if rel else None, box):
             out.append(d.file_name)
     return out
+
+
+def _demo_pending(session: Session, project: Project) -> bool:
+    """A demo whose chain (analysis, approval, bid checks) is still being built: the page reloads itself,
+    since the bid runs appear only after the tender run ends."""
+    if not demo.is_demo(project):
+        return False
+    runs = session.exec(
+        select(Run).join(Package, Run.package_id == Package.id).where(Package.project_id == project.id)
+    ).all()
+    if any(RunStatus(r.status) == RunStatus.failed for r in runs):
+        return False
+    done_bids = {r.package_id for r in runs if r.kind == RunKind.bid and RunStatus(r.status) == RunStatus.done}
+    bid_pkgs = session.exec(
+        select(Package).where(Package.project_id == project.id, Package.role == PackageRole.bid)
+    ).all()
+    return any(_documents(session, p.id) and p.id not in done_bids for p in bid_pkgs)
 
 
 def _busy(session: Session, packages: list[Package]) -> set[int]:
@@ -484,6 +531,28 @@ def home_page(request: Request) -> HTMLResponse:
     return _render(request, "home.html", active="home")
 
 
+@router.post("/demo/{side}")
+def start_demo_page(side: str, request: Request, session: Session = Depends(get_session)) -> Response:
+    """Creates the demo project of one side (read-only, replayed AI answers) and opens it. The run chain
+    continues in the background, and the project page shows its progress."""
+    if side not in demo.SIDES:
+        raise HTTPException(status_code=404, detail="not found")
+    try:
+        project_id = demo.create_demo(side, _lang(request), session=session)
+    except demo.DemoUnavailable as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _redirect(f"/projects/{project_id}")
+
+
+@router.get("/demo/samples.zip")
+def samples_zip_page() -> Response:
+    data = demo.samples_zip_bytes()
+    if data is None:
+        raise HTTPException(status_code=404, detail="sample documents are not available")
+    return Response(content=data, media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="{demo.ZIP_NAME}"'})
+
+
 @router.get("/supplier", response_class=HTMLResponse)
 def supplier_projects_page(request: Request, session: Session = Depends(get_session)) -> HTMLResponse:
     return _projects_view(request, session, side="supplier")
@@ -574,6 +643,7 @@ def _project_view(
         wrong_box=_wrong_box(session, [tender, bid]),
         removable=_unchecked(session, [tender, bid]),
         busy=_busy(session, [tender, bid]),
+        demo_pending=_demo_pending(session, project),
         confirm_package=confirm_package,
         doc_types=DOC_TYPES,
         approved=_has_approved_checklist(session, project.id),
@@ -613,6 +683,8 @@ def set_deadline_page(
     session: Session = Depends(get_session),
 ) -> Response:
     project = _project_or_404(session, project_id)
+    if demo.is_demo(project):
+        return _refuse_demo(request, f"/projects/{project.id}")
     try:
         value = _parse_datetime(submission_deadline)
     except ValueError:
@@ -625,10 +697,14 @@ def set_deadline_page(
 def upload_page(
     project_id: int,
     package_id: int,
+    request: Request,
     files: list[UploadFile] | None = File(None),
     session: Session = Depends(get_session),
     store: FileStore = Depends(get_store),
 ) -> Response:
+    project = _project_or_404(session, project_id)
+    if demo.is_demo(project):
+        return _refuse_demo(request, f"/projects/{project.id}")
     _package_in_project(session, project_id, package_id)
     real = [f for f in (files or []) if f.filename]
     if not real:
@@ -649,6 +725,8 @@ def set_doc_type_page(
 ) -> Response:
     _document_in_project(session, project_id, document_id)
     project = _project_or_404(session, project_id)
+    if demo.is_demo(project):
+        return _refuse_demo(request, f"/projects/{project.id}")
     if doc_type and doc_type not in DOC_TYPES:
         return _project_view(request, session, project, status_code=422, error=_tr(request)("error.form"))
     if doc_type:  # an empty choice means "leave as detected"
@@ -665,6 +743,8 @@ def remove_document_page(
     store: FileStore = Depends(get_store),
 ) -> Response:
     project = _project_or_404(session, project_id)
+    if demo.is_demo(project):
+        return _refuse_demo(request, f"/projects/{project.id}")
     try:
         delete_document(project_id=project.id, document_id=document_id, session=session, store=store)
     except HTTPException as exc:
@@ -683,6 +763,8 @@ def start_run_page(
     session: Session = Depends(get_session),
 ) -> Response:
     project = _project_or_404(session, project_id)
+    if demo.is_demo(project):
+        return _refuse_demo(request, f"/projects/{project.id}")
     package = _package_in_project(session, project_id, package_id)
     if confirm != "1":
         names = _misplaced_files(session, package)
@@ -879,6 +961,8 @@ def checklist_page(
 @router.post("/projects/{project_id}/checklist/approve")
 def approve_page(project_id: int, request: Request, session: Session = Depends(get_session)) -> Response:
     project = _project_or_404(session, project_id)
+    if demo.is_demo(project):
+        return _refuse_demo(request, f"/projects/{project.id}/checklist")
     try:
         # Suggestions still pending (duplicates, tender facts, platform items) are applied first: a
         # checklist approved with them checks the bid against non-requirements and duplicates.
@@ -895,6 +979,8 @@ def approve_page(project_id: int, request: Request, session: Session = Depends(g
 @router.post("/projects/{project_id}/checklist/new-version")
 def new_version_page(project_id: int, request: Request, session: Session = Depends(get_session)) -> Response:
     project = _project_or_404(session, project_id)
+    if demo.is_demo(project):
+        return _refuse_demo(request, f"/projects/{project.id}/checklist")
     try:
         draft = new_checklist_version(project_id=project.id, session=session)
     except HTTPException as exc:
@@ -919,6 +1005,8 @@ def add_requirement_page(
     session: Session = Depends(get_session),
 ) -> Response:
     project = _project_or_404(session, project_id)
+    if demo.is_demo(project):
+        return _refuse_demo(request, f"/projects/{project.id}/checklist")
     try:
         body = RequirementIn(
             scope=scope,
@@ -948,6 +1036,8 @@ def merge_page(
     session: Session = Depends(get_session),
 ) -> Response:
     project = _project_or_404(session, project_id)
+    if demo.is_demo(project):
+        return _refuse_demo(request, f"/projects/{project.id}/checklist")
     tr = _tr(request)
     try:
         merge_requirements(project_id=project.id, body=MergeIn(ids=ids or []), session=session)
@@ -994,6 +1084,8 @@ def apply_all_suggestions_page(
     session: Session = Depends(get_session),
 ) -> Response:
     project = _project_or_404(session, project_id)
+    if demo.is_demo(project):
+        return _refuse_demo(request, f"/projects/{project.id}/checklist")
     filters = _filter_args(scope, req_type, category, include_excluded, suggested, platform)
     try:
         result = apply_suggestions(project_id=project.id, body=None, session=session)
@@ -1017,6 +1109,8 @@ def apply_one_suggestion_page(
     session: Session = Depends(get_session),
 ) -> Response:
     project = _project_or_404(session, project_id)
+    if demo.is_demo(project):
+        return _refuse_demo(request, f"/projects/{project.id}/checklist")
     row = _requirement_in_project(session, project.id, requirement_id)
     code = row.code
     filters = _filter_args(scope, req_type, category, include_excluded, suggested, platform)
@@ -1071,6 +1165,8 @@ def save_requirement_page(
     session: Session = Depends(get_session),
 ) -> Response:
     project = _project_or_404(session, project_id)
+    if demo.is_demo(project):
+        return _refuse_demo(request, f"/projects/{project.id}/checklist")
     row = _requirement_in_project(session, project.id, requirement_id)
     tr = _tr(request)
     fields: dict[str, Any] = {
@@ -1677,6 +1773,8 @@ def compare_override_page(
     session: Session = Depends(get_session),
 ) -> Response:
     """Overrides the status through the same service as POST /api/v1/match-results/{id}/override."""
+    if demo.is_demo(_project_of_run(session, run_id)):
+        return _refuse_demo(request, f"/runs/{run_id}/compare")
     tr = _tr(request)
     row = _run_item_or_404(session, run_id, requirement_id)
     try:
@@ -1711,6 +1809,8 @@ def _platform_reply(request: Request, session: Session, run_id: int, requirement
                     confirmed: bool) -> Response:
     """Goes through the same override service as the comparison form. HTMX gets the card and the top bar
     (the top bar is swapped out of band); a plain form is redirected back to the card."""
+    if demo.is_demo(_project_of_run(session, run_id)):
+        return _refuse_demo(request, f"/runs/{run_id}/compare#platform-card")
     tr = _tr(request)
     results = get_results(run_id=run_id, session=session)
     check = _platform_check_for(results, requirement_id)
@@ -2168,6 +2268,7 @@ def _customer_project_view(
         cards=_bidder_cards(session, tr, project),
         wrong_box=_wrong_box(session, [tender, *bid_packages(session, project.id)]),
         removable=_unchecked(session, [tender, *bid_packages(session, project.id)]),
+        demo_pending=_demo_pending(session, project),
         confirm_package=confirm_package,
         deadline=_deadline_status(project.submission_deadline),
         deadline_text=_deadline_text(project.submission_deadline),
@@ -2187,6 +2288,8 @@ def add_bidder_page(
     session: Session = Depends(get_session),
 ) -> Response:
     project = _customer_or_404(session, project_id)
+    if demo.is_demo(project):
+        return _refuse_demo(request, f"/projects/{project.id}")
     tr = _tr(request)
     try:
         package = create_bidder(project_id=project.id, body=BidderCreate(name=name, stir=stir.strip() or None),
@@ -2208,6 +2311,8 @@ def remove_bidder_page(
     store: FileStore = Depends(get_store),
 ) -> Response:
     project = _customer_or_404(session, project_id)
+    if demo.is_demo(project):
+        return _refuse_demo(request, f"/projects/{project.id}")
     try:
         delete_bidder(project_id=project.id, package_id=package_id, session=session, store=store)
     except HTTPException as exc:
@@ -2224,6 +2329,8 @@ CONFIRM_CHECK_ALL = -1  # confirm_package value for the "Check all bidders" butt
 def check_all_page(project_id: int, request: Request, confirm: str = Form(""),
                    session: Session = Depends(get_session)) -> Response:
     project = _customer_or_404(session, project_id)
+    if demo.is_demo(project):
+        return _refuse_demo(request, f"/projects/{project.id}")
     if confirm != "1":
         names = [n for pkg in bid_packages(session, project.id) for n in _misplaced_files(session, pkg)]
         if names:
@@ -2262,6 +2369,7 @@ def comparison_page(
 def decision_page(
     project_id: int,
     package_id: int,
+    request: Request,
     member_name: str = Form(""),
     text: str = Form(""),
     next_url: str = Form("", alias="next"),
@@ -2271,6 +2379,8 @@ def decision_page(
     Back to the split view that sent it, with the outcome in the query string."""
     project = _customer_or_404(session, project_id)
     back = next_url if next_url.startswith("/runs/") and "//" not in next_url else f"/projects/{project.id}/comparison"
+    if demo.is_demo(project):
+        return _refuse_demo(request, back)
     try:
         add_decision(project_id=project.id, package_id=package_id,
                      body=DecisionIn(member_name=member_name, text=text), session=session)

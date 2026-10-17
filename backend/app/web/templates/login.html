@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}{{ t('login.title') }}{% endblock %}
+{% block content %}
+<style>
+  .login-card { max-width: 420px; display: grid; gap: 0.7rem; }
+  .login-card label { display: flex; flex-direction: column; gap: 0.25rem; }
+  .login-card input[type=password] { width: 100%; }
+</style>
+<h1>{{ t('login.title') }}</h1>
+<p class="muted">{{ t('login.lead') }}</p>
+{% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+<form method="post" action="/login" class="card login-card">
+  <input type="hidden" name="next" value="{{ next_value }}">
+  <label>{{ t('login.password') }}
+    <input type="password" name="password" required autocomplete="current-password" autofocus>
+  </label>
+  <div class="actions">
+    <button type="submit" class="btn primary">{{ t('login.submit') }}</button>
+  </div>
+</form>
+{% if demo_public %}
+<p class="muted small">{{ t('login.demo_note') }} <a href="/">{{ t('login.home') }}</a></p>
+{% endif %}
+{% endblock %}

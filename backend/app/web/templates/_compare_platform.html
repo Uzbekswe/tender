@@ -16,14 +16,14 @@
         {% if p.quote %}<blockquote>{{ p.quote }}</blockquote>{% endif %}
         {% if p.page is not none %}<p class="small muted">{{ t('compare.panel.page') }} {{ p.page }}</p>{% endif %}
         <div class="actions">
-          <form method="post" action="{{ p.confirm_url }}" class="inline-form"
+          {% if not demo %}<form method="post" action="{{ p.confirm_url }}" class="inline-form"
                 hx-post="{{ p.confirm_url }}" hx-target="#platform-card" hx-swap="outerHTML">
             <button type="submit" class="btn small primary"{% if p.confirmed %} disabled{% endif %}>{{ t('platform.confirm') }}</button>
-          </form>
-          <form method="post" action="{{ p.unconfirm_url }}" class="inline-form"
+          </form>{% endif %}
+          {% if not demo %}<form method="post" action="{{ p.unconfirm_url }}" class="inline-form"
                 hx-post="{{ p.unconfirm_url }}" hx-target="#platform-card" hx-swap="outerHTML">
             <button type="submit" class="btn small"{% if not p.confirmed %} disabled{% endif %}>{{ t('platform.unconfirm') }}</button>
-          </form>
+          </form>{% endif %}
         </div>
       </li>
     {% endfor %}

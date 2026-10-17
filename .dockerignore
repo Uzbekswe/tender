@@ -1,0 +1,37 @@
+# Keep private documents, runtime data, secrets and local tooling out of the image.
+.git
+**/.git
+**/.venv
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+
+# Runtime data and real documents (confidential)
+data
+data/**
+data_runs
+data_runs/**
+test-data
+test-data/**
+output
+output/**
+**/eval/gold
+**/eval/reports
+docs
+docs/**
+lucius-supplier-side-research.md
+
+# Databases, logs, secrets
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/*.sqlite
+**/*.sqlite3
+**/*.log
+**/.env
+**/.env.*
+!**/.env.example
+**/*.pem
+**/*.key

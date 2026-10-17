@@ -47,6 +47,7 @@
   </div>
 </header>
 <main class="container">
+  {% if demo %}<div class="alert alert-warn demo-banner" role="status">{{ t('demo.readonly') }}</div>{% endif %}
   {% block content %}{% endblock %}
 </main>
 <script>

@@ -29,8 +29,8 @@
   </td>
   <td data-label="{{ t('checklist.col.confidence') }}">{{ req.confidence|round(0)|int }}</td>
   <td data-label="{{ t('checklist.col.actions') }}">
-    <a class="btn small" href="/projects/{{ pid }}/checklist/requirements/{{ req.id }}/edit"
+    {% if not demo %}<a class="btn small" href="/projects/{{ pid }}/checklist/requirements/{{ req.id }}/edit"
        hx-get="/projects/{{ pid }}/checklist/requirements/{{ req.id }}/edit"
-       hx-target="#req-{{ req.id }}" hx-swap="outerHTML">{{ t('common.edit') }}</a>
+       hx-target="#req-{{ req.id }}" hx-swap="outerHTML">{{ t('common.edit') }}</a>{% endif %}
   </td>
 </tr>

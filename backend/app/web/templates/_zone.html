@@ -1,6 +1,6 @@
 {# The upload drop zone and the file list of one package. The caller sets `zone` (title, package, docs)
    and the heading. Uploads post to the package's own URL, so bidders and the tender use the same code. #}
-    <form class="dropzone" method="post"
+    {% if not demo %}<form class="dropzone" method="post"
           action="/projects/{{ project.id }}/packages/{{ zone.package.id }}/upload"
           enctype="multipart/form-data"
           data-zone
@@ -11,7 +11,7 @@
       <button type="submit" class="btn primary">{{ t('project.zone.upload') }}</button>
       <div class="progress" hidden><div class="bar"></div></div>
       <p class="zone-msg" role="status"></p>
-    </form>
+    </form>{% endif %}
 
     {% set misplaced_names = (wrong_box or {}).get(zone.package.id) %}
     {% if misplaced_names %}
@@ -37,13 +37,13 @@
             {% if d.path_in_archive %}<div class="muted small">{{ d.path_in_archive }}</div>{% endif %}
             {% if d.page_count %}<div class="muted small">{{ d.page_count }} {{ t('project.docs.pages') }}</div>{% endif %}
             {% if removable and zone.package.id in removable %}
-              <form method="post" action="/projects/{{ project.id }}/documents/{{ d.id }}/remove" class="inline-form">
+              {% if not demo %}<form method="post" action="/projects/{{ project.id }}/documents/{{ d.id }}/remove" class="inline-form">
                 <button type="submit" class="btn small">{{ t('project.docs.remove') }}</button>
-              </form>
+              </form>{% endif %}
             {% endif %}
           </td>
           <td data-label="{{ t('project.docs.type') }}">
-            <form method="post" action="/projects/{{ project.id }}/documents/{{ d.id }}/doc-type" class="inline-form">
+            {% if not demo %}<form method="post" action="/projects/{{ project.id }}/documents/{{ d.id }}/doc-type" class="inline-form">
               <select name="doc_type" aria-label="{{ t('project.docs.type') }}">
                 {% if not d.doc_type %}<option value="" selected>{{ t('project.docs.undetected') }}</option>{% endif %}
                 {% for dt in doc_types %}
@@ -51,7 +51,7 @@
                 {% endfor %}
               </select>
               <button type="submit" class="btn small">{{ t('project.docs.save') }}</button>
-            </form>
+            </form>{% else %}{{ t('doc_type.' ~ d.doc_type) if d.doc_type else t('project.docs.undetected') }}{% endif %}
           </td>
           <td data-label="{{ t('project.docs.warnings') }}">
             {% for w in d.warnings %}
