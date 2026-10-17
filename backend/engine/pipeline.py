@@ -196,8 +196,22 @@ def _unique(items: Iterable[str]) -> list[str]:
     return list(dict.fromkeys(items))
 
 
-def _label(document_id: int, number: int) -> str:
-    return f"DOC-{document_id:02d} p.{number}"
+def doc_ordinal(document_id: int) -> int:
+    """1-based position of the document within its package (upload order). Prompts use it instead of
+    the database id, so the same files give the same prompts on any installation (the replayed demo
+    and the answer cache depend on that)."""
+    with session_scope() as session:
+        doc = session.get(Document, document_id)
+        if doc is None:
+            return document_id
+        ids = list(session.exec(
+            select(Document.id).where(Document.package_id == doc.package_id).order_by(Document.id)
+        ).all())
+    return ids.index(document_id) + 1 if document_id in ids else document_id
+
+
+def _label(document_id: int, number: int, ordinal: int | None = None) -> str:
+    return f"DOC-{ordinal if ordinal is not None else doc_ordinal(document_id):02d} p.{number}"
 
 
 def _join(*parts: str | None) -> str:

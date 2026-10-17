@@ -123,3 +123,9 @@ def test_a_second_click_does_not_queue_a_duplicate_run(client: TestClient, monke
     assert "already running" in second.text
     assert len(queued) == 1
     assert "disabled" in client.get(f"/projects/{ids['project']}").text
+
+
+def test_a_cover_letter_that_mentions_the_tender_documentation_is_still_a_bid() -> None:
+    title = "ПИСЬМО-ЗАЯВКА\nМы изучили тендерную документацию № 17 и выражаем готовность участвовать."
+    assert guess_role("01 Письмо-заявка и гарантия.pdf", title) == "bid"
+    assert guess_role("letter.pdf", title) == "bid"

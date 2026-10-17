@@ -811,3 +811,23 @@ def test_consolidation_reads_the_contradiction_questions_and_leaves_them(data_di
     assert [sorted(group) for group in data["contradictions"]] == [sorted([codes[R2.quote], codes[R4.quote]])]
     # The question feeds the clarification letter: consolidation never removes it.
     assert any(q.kind == "contradiction" for q in _questions(package_id))
+
+
+def test_contract_terms_set_by_the_customer_are_suggested_for_exclusion() -> None:
+    from engine.tender_stages import _validated_suggestions
+
+    rows = [
+        _row("T-021", "Пеня", quote="Пеня за каждый день просрочки 0,1 %"),
+        _row("T-002", "Оперативная память", quote="не менее 16 ГБ"),
+    ]
+    result = _validated_suggestions([], rows, customer_terms=["T-021"])
+    assert result["T-021"]["decision"] == "exclude" and result["T-021"]["reason_code"] == "POST_AWARD"
+    assert "customer" in result["T-021"]["note"]
+    assert result["T-002"]["decision"] == "keep"
+
+
+def test_penalty_clauses_are_customer_terms_by_their_wording() -> None:
+    from engine.tender_stages import _validated_suggestions
+
+    rows = [_row("T-020", "Пеня за просрочку", quote="Пеня 0,1 % за каждый день просрочки")]
+    assert _validated_suggestions([], rows)["T-020"]["reason_code"] == "POST_AWARD"

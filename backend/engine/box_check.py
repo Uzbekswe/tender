@@ -18,12 +18,14 @@ _BID_WORDS = re.compile(
     r"тендерн\w* предложени|коммерческ\w* предложени|ценов\w* предложени|техническ\w* предложени"
     r"|конкурсн\w* предложени|предложени\w* участник|заявк\w* на участие|оферт"
     r"|tender taklif|tijorat taklif|narx taklif|texnik taklif|taklifnoma|ishtirok etish uchun ariza"
-    r"|\bbid\b|\boffer\b|\bproposal\b",
+    r"|\bbid\b|\boffer\b|\bproposal\b"
+    r"|письмо[\s-]*заявк|ariza[\s-]*xat|гарантийное письмо участника|форма\s*№?\s*1\b",
 )
 _TENDER_WORDS = re.compile(
-    r"тендерн\w* документаци|конкурсн\w* документаци|закупочн\w* документаци|документаци\w* о закупк"
-    r"|техническ\w* задани|приглашени\w* к участию|извещени\w* о проведении"
-    r"|tender hujjat|xarid hujjat|tanlov hujjat|texnik topshiriq"
+    # Nominative (title) forms only: a bid mentions "тендерную документацию" in other cases.
+    r"тендерная документация|конкурсная документация|закупочная документация|документация о закупке"
+    r"|техническое задание|приглашение к участию|извещение о проведении"
+    r"|tender hujjatlari|xarid hujjatlari|tanlov hujjatlari|texnik topshiriq\b"
     r"|tender documentation|bidding documents|terms of reference|invitation to bid",
 )
 

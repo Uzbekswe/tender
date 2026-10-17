@@ -688,7 +688,9 @@ def test_row_doc_type_does_not_use_the_type_of_a_long_merged_file() -> None:
 
 
 def test_wrong_doc_type_is_only_for_a_proof_document_of_another_proof_type() -> None:
-    req = _req(evidence_doc_types=("tax_certificate",), parameter="Справка о налоговой регистрации")
+    # The tender itself names the document (confirmation_method), so another proof document is the wrong type.
+    req = _req(evidence_doc_types=("tax_certificate",), parameter="Справка о налоговой регистрации",
+               confirmation_method="Справка налогового органа о регистрации")
     checked = _assess(req, _answer("satisfies", _ev(CONTRACT)), _page("contract", CONTRACT))
     assert "WRONG_DOC_TYPE" in checked.result["reason_codes"]
     assert checked.result["status"] == Status.not_confirmed
@@ -816,3 +818,26 @@ def test_a_sure_contradiction_still_does_not_meet() -> None:
                evidence_doc_types=(), confirmation_method=None)
     checked = _assess(req, _answer("contradicts", _ev(CERT)), _page("technical_proposal", CERT))
     assert checked.result["status"] == Status.does_not_meet
+
+
+@pytest.mark.parametrize("bound, issued, model_says, status", [
+    ("не ранее 30.11.2026", "18.12.2026", "contradicts", Status.meets),        # the model misread the order
+    ("не ранее 30.11.2026", "01.11.2026", "satisfies", Status.does_not_meet),  # too old, whatever the model says
+    ("not later than 31.12.2026", "15.12.2026", "contradicts", Status.meets),
+])
+def test_date_bounds_are_compared_by_code(bound: str, issued: str, model_says: str, status: Status) -> None:
+    quote = f"Справка о налоговой задолженности. Дата выдачи {issued}."
+    req = _req(code="U-003", parameter="Справка об отсутствии налоговой задолженности", operator="exists",
+               value=bound, evidence_doc_types=("tax_certificate",))
+    checked = _assess(req, _answer(model_says, _ev(quote, value=issued)), _page("tax_certificate", quote))
+    assert checked.result["status"] == status
+    assert checked.result["method"] == "rule"
+
+
+def test_a_guessed_doc_type_list_does_not_reject_another_proof_document() -> None:
+    # "Licence or dealer letter": the extractor guessed licence/certificate; the page was typed power of attorney.
+    req = _req(parameter="Лицензия или дилерское письмо", evidence_doc_types=("license", "certificate"),
+               confirmation_method=None)
+    checked = _assess(req, _answer("satisfies", _ev(CERT)), _page("power_of_attorney", CERT))
+    assert checked.result["status"] == Status.meets
+    assert "WRONG_DOC_TYPE" not in checked.result["reason_codes"]
