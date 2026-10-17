@@ -14,10 +14,12 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
+from jinja2 import pass_context
 from markupsafe import Markup, escape
 from pydantic import ValidationError
 from sqlmodel import Session, col, select
 
+from app.accounts import current_user, owner_for_new_project, visibility_clauses
 from app.api.customer import (
     add_decision,
     check_all,
@@ -100,6 +102,17 @@ def asset(name: str) -> str:
 
 
 templates.env.globals["asset"] = asset
+
+
+@pass_context
+def _header_user(context: Any) -> Any:
+    """The signed-in account for the header (base.html); None without accounts or without a cookie."""
+    request = context.get("request")
+    return current_user(request) if request is not None else None
+
+
+templates.env.globals["account_user"] = _header_user
+templates.env.globals["accounts_enabled"] = lambda: get_settings().accounts
 
 router = APIRouter(tags=["web"])
 
@@ -495,7 +508,7 @@ def _projects_view(
 ) -> HTMLResponse:
     """The project list of one side (supplier or customer). The side also sets the mode of a new project."""
     projects = session.exec(
-        select(Project).where(Project.mode == side).order_by(col(Project.id).desc())
+        select(Project).where(Project.mode == side, *visibility_clauses(request)).order_by(col(Project.id).desc())
     ).all()
     scores = _latest_scores(session)
     rows = []
@@ -593,7 +606,7 @@ def create_project_page(
         return _projects_view(
             request, session, side=side, status_code=422, error=_tr(request)("error.form"), values=values
         )
-    project = create_project(body, session)
+    project = create_project(body, request, session)
     create_package(project.id, PackageCreate(role=PackageRole.tender, label="Tender"), session)
     if body.mode == "supplier":  # a customer project gets its bidders added one by one
         create_package(project.id, PackageCreate(role=PackageRole.bid, label="Bid"), session)

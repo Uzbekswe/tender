@@ -24,6 +24,8 @@ def data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     # A developer's backend/.env may set the access gate; tests start with it off (test_access turns it on).
     monkeypatch.setenv("ACCESS_PASSWORD", "")
     monkeypatch.setenv("DEMO_PUBLIC", "false")
+    monkeypatch.setenv("ACCOUNTS", "0")
+    monkeypatch.setenv("SIGNUP_CODE", "")
     get_settings.cache_clear()
     db.reset_engine()
     yield root

@@ -4,9 +4,26 @@
 <style>
   .login-card { max-width: 420px; display: grid; gap: 0.7rem; }
   .login-card label { display: flex; flex-direction: column; gap: 0.25rem; }
-  .login-card input[type=password] { width: 100%; }
+  .login-card input { width: 100%; }
 </style>
 <h1>{{ t('login.title') }}</h1>
+{% if accounts %}
+<p class="muted">{{ t('account.login.lead') }}</p>
+{% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+<form method="post" action="/login" class="card login-card">
+  <input type="hidden" name="next" value="{{ next_value }}">
+  <label>{{ t('account.email') }}
+    <input type="email" name="email" value="{{ email }}" required autocomplete="email" autocapitalize="none" autofocus>
+  </label>
+  <label>{{ t('login.password') }}
+    <input type="password" name="password" required autocomplete="current-password">
+  </label>
+  <div class="actions">
+    <button type="submit" class="btn primary">{{ t('login.submit') }}</button>
+  </div>
+</form>
+<p class="muted small"><a href="/signup?next={{ next_value|urlencode }}">{{ t('account.signup.link') }}</a></p>
+{% else %}
 <p class="muted">{{ t('login.lead') }}</p>
 {% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
 <form method="post" action="/login" class="card login-card">
@@ -18,6 +35,7 @@
     <button type="submit" class="btn primary">{{ t('login.submit') }}</button>
   </div>
 </form>
+{% endif %}
 {% if demo_public %}
 <p class="muted small">{{ t('login.demo_note') }} <a href="/">{{ t('login.home') }}</a></p>
 {% endif %}

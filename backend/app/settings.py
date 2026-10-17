@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     access_password: str = ""
     demo_public: bool = False  # with the gate on: start page, demo projects and demo sample download stay open
     session_secret: str = ""  # signs the login cookie; empty = derived from access_password
+    # Accounts (app/web/auth.py, app/accounts.py). ACCOUNTS=1 replaces the shared password: visitors sign up
+    # with an email and their own password, and each project belongs to the account that created it.
+    accounts: bool = False
+    signup_code: str = ""  # invite code a visitor must type to sign up; empty = anyone may sign up
 
     @property
     def db_url(self) -> str:

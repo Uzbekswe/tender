@@ -110,6 +110,9 @@ blockquote {
 .nav a.active { color: var(--text); font-weight: 600; }
 .nav-soon { color: var(--muted); opacity: 0.6; cursor: default; }
 .topbar-tools { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; }
+.account { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; white-space: nowrap; }
+.account-email { color: var(--muted); max-width: 14rem; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 640px) { .account-email { max-width: 7.5rem; } }
 .visually-hidden {
   position: absolute;
   width: 1px;

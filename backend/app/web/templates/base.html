@@ -22,6 +22,17 @@
   </nav>
   {% set lang_names = [('ru', 'Русский'), ('uz', 'Oʻzbekcha'), ('en', 'English')] %}
   <div class="topbar-tools">
+    {% if accounts_enabled() %}
+    {% set me = account_user() %}
+    <div class="account">
+      {% if me %}
+      <span class="account-email" title="{{ me.email }}">{{ me.email }}</span>
+      <a href="/logout">{{ t('account.nav.logout') }}</a>
+      {% else %}
+      <a href="/login">{{ t('account.nav.login') }}</a>
+      {% endif %}
+    </div>
+    {% endif %}
     <details class="lang-menu">
       <summary>
         <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>

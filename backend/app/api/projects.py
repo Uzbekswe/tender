@@ -8,10 +8,11 @@ import hashlib
 import mimetypes
 from typing import BinaryIO, TypeVar
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from sqlmodel import Session, SQLModel, col, select
 
+from app.accounts import owner_for_new_project, visibility_clauses
 from app.db import get_session
 from app.models import (
     AuditLog,
@@ -76,8 +77,8 @@ def _guess_mime(name: str, declared: str | None) -> str:
 # ---------- projects ----------
 
 @router.post("/projects", response_model=ProjectRead, status_code=201)
-def create_project(body: ProjectCreate, session: Session = Depends(get_session)) -> ProjectRead:
-    project = Project(**body.model_dump())
+def create_project(body: ProjectCreate, request: Request, session: Session = Depends(get_session)) -> ProjectRead:
+    project = Project(**body.model_dump(), owner_id=owner_for_new_project(request))
     session.add(project)
     session.commit()
     session.refresh(project)
@@ -85,8 +86,8 @@ def create_project(body: ProjectCreate, session: Session = Depends(get_session))
 
 
 @router.get("/projects", response_model=list[ProjectRead])
-def list_projects(session: Session = Depends(get_session)) -> list[ProjectRead]:
-    projects = session.exec(select(Project).order_by(Project.id)).all()
+def list_projects(request: Request, session: Session = Depends(get_session)) -> list[ProjectRead]:
+    projects = session.exec(select(Project).where(*visibility_clauses(request)).order_by(Project.id)).all()
     return [ProjectRead.model_validate(p) for p in projects]
 
 
