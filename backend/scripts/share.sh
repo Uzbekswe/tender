@@ -31,11 +31,13 @@ if [[ -n "${ACCESS_PASSWORD:-}" ]]; then
   password_set=1
 elif [[ -f "${BACKEND_DIR}/.env" ]] && grep -qE '^[[:space:]]*ACCESS_PASSWORD[[:space:]]*=[[:space:]]*[^[:space:]]' "${BACKEND_DIR}/.env"; then
   password_set=1
+elif [[ "${ACCOUNTS:-}" =~ ^(1|true|yes)$ ]] || { [[ -f "${BACKEND_DIR}/.env" ]] && grep -qiE '^[[:space:]]*ACCOUNTS[[:space:]]*=[[:space:]]*(1|true|yes)' "${BACKEND_DIR}/.env"; }; then
+  password_set=1  # account mode: sign-in required (with SIGNUP_CODE, only invited people can sign up)
 fi
 if [[ "${password_set}" -eq 0 ]]; then
-  echo "${YELLOW}WARNING:${RESET} ACCESS_PASSWORD is not set in backend/.env."
+  echo "${YELLOW}WARNING:${RESET} neither ACCOUNTS=1 nor ACCESS_PASSWORD is set in backend/.env."
   echo "  Anyone with the link can create projects and use your AI quota."
-  echo "  Set ACCESS_PASSWORD and DEMO_PUBLIC=1 in backend/.env, restart the app, then run this script again."
+  echo "  Set ACCOUNTS=1, SIGNUP_CODE=<invite code> and DEMO_PUBLIC=1 in backend/.env, restart the app, then run this script again."
   echo
 fi
 

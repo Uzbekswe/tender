@@ -74,7 +74,8 @@ def init_db() -> None:
 def _add_missing_columns(engine) -> None:
     """MVP migration: add columns that are in the models but not yet in an existing SQLite table.
 
-    Only plain additions with a default are handled; anything else needs Alembic (production path).
+    Plain additions only: a column with a plain default, or a nullable column without one (NULL for
+    every existing row, e.g. Project.owner_id). Anything else needs Alembic (production path).
     """
     if engine.dialect.name != "sqlite":
         return
@@ -87,14 +88,22 @@ def _add_missing_columns(engine) -> None:
                 continue
             existing = {c["name"] for c in inspector.get_columns(table.name)}
             for column in table.columns:
-                if column.name in existing or column.default is None:
+                if column.name in existing:
                     continue
-                default = column.default.arg
-                if callable(default) or not isinstance(default, (str, int, float, bool)):
-                    continue
-                literal = f"'{default}'" if isinstance(default, str) else str(int(default) if isinstance(default, bool) else default)
                 ddl = column.type.compile(dialect=engine.dialect)
-                conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{column.name}" {ddl} DEFAULT {literal}'))
+                if column.default is None:
+                    if not column.nullable:
+                        continue
+                    clause = ""
+                else:
+                    default = column.default.arg
+                    if callable(default) or not isinstance(default, (str, int, float, bool)):
+                        continue
+                    literal = f"'{default}'" if isinstance(default, str) else str(int(default) if isinstance(default, bool) else default)
+                    clause = f" DEFAULT {literal}"
+                conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{column.name}" {ddl}{clause}'))
+                if column.index:
+                    conn.execute(text(f'CREATE INDEX IF NOT EXISTS "ix_{table.name}_{column.name}" ON "{table.name}" ("{column.name}")'))
 
 
 def get_session() -> Iterator[Session]:

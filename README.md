@@ -60,14 +60,15 @@ Open http://localhost:8010. Keep the terminal open while you use the app; Ctrl+C
 Use this to let a colleague try the app in a browser, without installing anything.
 
 1. Install the tunnel tool once: `brew install cloudflared`.
-2. In `backend/.env`, set a password and turn on the public demo:
+2. In `backend/.env`, turn on accounts, give your testers an invite code, and turn on the public demo:
 
    ```
-   ACCESS_PASSWORD=choose-a-long-password
+   ACCOUNTS=1
+   SIGNUP_CODE=choose-an-invite-code
    DEMO_PUBLIC=1
    ```
 
-   Visitors must enter the password to create projects. The demo projects stay open without it.
+   Each tester signs up with an email and their own password, using the invite code you give them, and then logs in. Each person sees only the projects they created. The first account created is the admin and sees everything. The demo projects stay open without an account.
 3. Start the app and keep this terminal open: `cd backend && uv run uvicorn app.main:app --port 8010`. Restart it after you change `.env`.
 4. In a second terminal run `cd backend && bash scripts/share.sh`. It prints a link that starts with `https://` and ends in `trycloudflare.com`.
 5. Send that link. It works while your Mac, the app and the script are running. Press Ctrl+C to stop. The link changes each time you run the script.

@@ -83,9 +83,19 @@ class RunStatus(StrEnum):
 
 # ---------- tables ----------
 
+class User(SQLModel, table=True):
+    """An account (ACCOUNTS=1, app/web/auth.py). The first account created is the admin."""
+    id: int | None = Field(default=None, primary_key=True)
+    email: str = Field(unique=True, index=True)  # lower-case
+    password_hash: str  # "scrypt$n$r$p$salt_hex$hash_hex", see app/accounts.py
+    is_admin: bool = False
+    created_at: datetime = Field(default_factory=utcnow)
+
+
 class Project(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     company_id: int = 1  # data isolation in production
+    owner_id: int | None = Field(default=None, foreign_key="user.id", index=True)  # None: demo or no-account mode
     name: str
     customer: str | None = None
     lot_number: str | None = None
