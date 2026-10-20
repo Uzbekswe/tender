@@ -45,7 +45,7 @@ from engine.ingest import extract_pages, render_page_png  # noqa: E402
 from engine.textlayer import score_text_layer  # noqa: E402
 from engine.vision import read_page  # noqa: E402
 from llm.providers import get_provider  # noqa: E402
-from llm.service import DefaultLLMClient, LLMLimits  # noqa: E402
+from llm.service import DefaultLLMClient, LLMLimits, cache_provider_name, provider_name  # noqa: E402
 
 FLAG = "--i-understand-data-is-sent-to-provider"
 COLUMNS = ("model", "page", "seconds", "chars", "word_ratio", "digits", "illegible", "rotation", "error")
@@ -169,8 +169,8 @@ async def run_bakeoff(models: list[str], items: list[PageItem]) -> list[dict[str
     init_db()
     settings = get_settings()
     config = load_toml(settings.models_config)
-    provider_name = config.get("provider", "openrouter")
-    provider = get_provider(provider_name)
+    selected_provider = provider_name()  # LLM_PROVIDER wins over models.toml, like the app
+    provider = get_provider(selected_provider)
     limits = LLMLimits.from_dict(config.get("limits", {}))
     out_root = settings.data_dir / "bakeoff"
 
@@ -180,7 +180,7 @@ async def run_bakeoff(models: list[str], items: list[PageItem]) -> list[dict[str
         client = DefaultLLMClient(
             lambda: Session(get_engine()),
             provider,
-            provider_name=provider_name,
+            provider_name=cache_provider_name(selected_provider),
             tasks={**config.get("tasks", {}), "read_page": model},
             prompt_versions=config.get("prompt_versions", {}),
             limits=limits,

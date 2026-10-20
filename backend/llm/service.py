@@ -374,10 +374,26 @@ def _next_in(order: Sequence[str], enabled: bool, tier: str) -> str | None:
 
 def provider_name() -> str:
     """The provider this install uses: LLM_PROVIDER (env wins), else models.toml `provider`, else claude_cli.
-    It is part of every cache key (engine.demo re-keys the replayed demo answers with it)."""
+
+    A `:agent` suffix in LLM_PROVIDER is ignored here; the cache identity carries it.
+    """
     settings = app_settings.get_settings()
     config = app_settings.load_toml(settings.models_config)
-    return (settings.llm_provider or config.get("provider") or "claude_cli").strip()
+    name = (settings.llm_provider or config.get("provider") or "claude_cli").strip()
+    return name.split(":", 1)[0].strip()
+
+
+def cache_provider_name(name: str | None = None) -> str:
+    """The provider identity in the LLM cache and in stage answer keys.
+
+    The OpenCode CLI answer depends on the agent as well as the model. The built-in
+    `plan` agent is part of the name, so switching agents cannot reuse old answers.
+    """
+    base = (name or provider_name()).strip()
+    if base == "opencode_cli":
+        agent = (app_settings.get_settings().opencode_agent or "plan").strip()
+        return f"opencode_cli:{agent}"
+    return base
 
 
 def get_llm_client(session_factory: Callable[[], Session]) -> DefaultLLMClient:
@@ -392,7 +408,7 @@ def get_llm_client(session_factory: Callable[[], Session]) -> DefaultLLMClient:
     return DefaultLLMClient(
         session_factory,
         get_provider(name),
-        provider_name=name,
+        provider_name=cache_provider_name(name),
         tasks=config.get("tasks", {}),
         prompt_versions=config.get("prompt_versions", {}),
         limits=LLMLimits.from_dict(limits_data),

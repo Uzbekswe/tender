@@ -35,3 +35,25 @@ def test_llm_status_skips_cli_version_for_other_providers(client: TestClient, mo
     assert body["provider"] == "anthropic_api"
     assert body["cli_version"] is None
     assert called == []
+
+
+def test_llm_status_reports_the_opencode_cli_and_agent(client: TestClient, monkeypatch):
+    import app.api.llm_status as status_module
+    from app.settings import get_settings
+
+    monkeypatch.setattr(status_module, "opencode_cli_found", lambda path: True)
+    monkeypatch.setattr(status_module, "opencode_cli_version", lambda path: "2.0.32")
+    monkeypatch.setenv("LLM_PROVIDER", "opencode_cli")
+    monkeypatch.setenv(
+        "MODELS_CONFIG",
+        str(status_module.app_settings.BACKEND_DIR / "config" / "models.opencode.toml"),
+    )
+    get_settings.cache_clear()
+
+    body = client.get("/api/v1/llm/status").json()
+
+    assert body["provider"] == "opencode_cli"
+    assert body["models"]["easy"] == "opencode/glm-5.3-flash-free"
+    assert body["opencode_cli_found"] is True
+    assert body["opencode_cli_version"] == "2.0.32"
+    assert body["opencode_agent"] == "plan"

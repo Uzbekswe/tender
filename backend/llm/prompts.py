@@ -121,6 +121,9 @@ def call_tag(task: str, prompt: str) -> str:
     config = load_toml(settings.models_config)
     value = config.get("tasks", {}).get(task, "")
     model = config.get("tiers", {}).get(value, value)
-    provider = (settings.llm_provider or config.get("provider", "")).strip()
+    # The lazy import avoids a cycle: llm.service imports this module at load time.
+    from llm.service import cache_provider_name
+
+    provider = cache_provider_name()
     version, _, _ = load_prompt(prompt, version=config.get("prompt_versions", {}).get(prompt))
     return f"{provider}:{model}|{version}"

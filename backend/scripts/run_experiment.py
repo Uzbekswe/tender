@@ -19,7 +19,9 @@ The tender files of the file must be the ones of the test set (same sha256).
 
 The data folder must be new or empty. DATA_DIR and DATABASE_URL point inside it before any app
 module is imported, so each run starts with an empty LLM cache and an empty database.
---provider sets LLM_PROVIDER for this run (otherwise models.toml decides).
+--provider sets LLM_PROVIDER for this run (otherwise models.toml decides). MODELS_CONFIG
+selects the models file (default: config/models.toml), for example
+MODELS_CONFIG=config/models.opencode.toml for the free OpenCode CLI.
 
 Stops with a clear message when the LLM provider is unavailable (ProviderUnavailable) or a run
 fails. Otherwise writes <data-dir>/experiment.json and prints a short summary. No bid text is
