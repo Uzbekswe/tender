@@ -1,8 +1,10 @@
 # LLM configuration. Task -> tier -> model; a stage can also ask for a tier directly.
 #
 # provider: claude_cli (default, uses the logged-in Claude Code account, no key)
-#           | anthropic_api (needs ANTHROPIC_API_KEY) | openrouter | handoff (development only)
-# LLM_PROVIDER in .env overrides `provider` below.
+#           | anthropic_api (needs ANTHROPIC_API_KEY) | openrouter
+#           | opencode_cli (free models, synthetic testing only; see README)
+#           | handoff (development only)
+# LLM_PROVIDER in .env overrides `provider` below. MODELS_CONFIG selects the file.
 
 provider = "claude_cli"
 

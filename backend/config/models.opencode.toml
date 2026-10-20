@@ -1,0 +1,42 @@
+# LLM configuration for the free OpenCode CLI provider.
+#
+# Use only with fictional demo data. The built-in `plan` agent can read files, so a
+# malicious document could inject instructions. The free models are also limited-time
+# and some of them log or train on inputs. See README "OpenCode CLI (free testing)".
+#
+#   MODELS_CONFIG=config/models.opencode.toml LLM_PROVIDER=opencode_cli \
+#     uv run python scripts/run_experiment.py --set ../test-data/demo-samples \
+#     --data-dir ../data_runs/opencode-demo --provider opencode_cli
+
+provider = "opencode_cli"
+
+[tiers]                    # tier -> model id
+easy     = "opencode/glm-5.3-flash-free"       # zero-retention; also supports images
+standard = "opencode/deepseek-v4.1-flash-free" # zero-retention
+hard     = "opencode/big-pickle"               # may log or train on inputs; synthetic data only
+# Zero-retention alternative for hard, if Big Pickle's data policy is not acceptable:
+# hard   = "opencode/longcat-2.5-preview-free"
+
+[tasks]                    # task -> tier (a value that is not a tier name is used as a model id)
+read_page              = "easy"      # vision on scanned / garbled pages
+page_cards             = "easy"      # clean-text page description = file classification
+confirm_contradictions = "easy"
+extract_requirements   = "standard"
+extract_scheme         = "standard"
+consolidate            = "standard"
+match                  = "standard"
+match_hard             = "hard"      # mandatory items with conflicting or unclear evidence
+word_recommendations   = "standard"
+
+[escalation]               # on an answer that fails validation twice, retry once on the next tier up
+enabled = true
+order = ["easy", "standard", "hard"]
+
+[prompt_versions]
+
+[limits]
+parallel_calls = 4         # LLM_CONCURRENCY in .env overrides this
+requests_per_minute = 20   # conservative for the free tier; re-check the current limit
+max_retries = 4
+request_timeout_s = 420    # large extraction prompts on free models can take several minutes
+temperature = 0            # OpenCode CLI has no temperature flag; the cache gives determinism

@@ -19,10 +19,13 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     openai_api_key: str = ""
     gemini_api_key: str = ""
-    # LLM provider: claude_cli (default) | anthropic_api | handoff | openrouter. Empty = models.toml `provider`.
+    # LLM provider: claude_cli (default) | anthropic_api | handoff | openrouter | opencode_cli.
+    # Empty = models.toml `provider`.
     llm_provider: str = ""
     llm_concurrency: int = 0  # max calls in flight; 0 = models.toml [limits].parallel_calls
     claude_cli_path: str = "claude"  # binary of Claude Code, looked up on PATH unless absolute
+    opencode_cli_path: str = "opencode"  # binary of OpenCode, looked up on PATH unless absolute
+    opencode_agent: str = "plan"  # built-in agent; custom agents trigger the free-tier 403
     models_config: Path = BACKEND_DIR / "config" / "models.toml"
     scoring_config: Path = BACKEND_DIR / "config" / "scoring.toml"
     prompts_dir: Path = BACKEND_DIR / "prompts"

@@ -60,9 +60,10 @@ uv run pytest
 
 ## LLM providers
 
-The LLM settings are in `config/models.toml`.
+The LLM settings are in `config/models.toml`. Set `MODELS_CONFIG` to use another file,
+for example `MODELS_CONFIG=config/models.opencode.toml` for the free OpenCode CLI.
 
-- `provider` selects the backend: `handoff` (development) or `openrouter`.
+- `provider` selects the backend: `claude_cli` (default), `openrouter`, `anthropic_api`, `opencode_cli` (free testing) or `handoff` (development).
 - `[tasks]` sets the model for each task, for example `match = "..."`. The tasks are `read_page`, `page_cards`, `extract_requirements`, `extract_scheme`, `confirm_contradictions`, `consolidate`, `match` and `word_recommendations`.
 - `[limits]` sets parallel calls, requests per minute, retries and timeout.
 - `[prompt_versions]` pins a prompt version. If it is empty, the newest `vN.md` in `prompts/<task>/` is used.
@@ -86,6 +87,78 @@ The LLM settings are in `config/models.toml`.
 5. Set `requests_per_minute` (default 120) and `parallel_calls` (default 4, or `LLM_CONCURRENCY` in .env) to your account's real limits.
 
 Free tier limits, as far as we know (re-check them, they change): about 20 requests per minute and about 50 per day. With at least $10 of credit, about 1,000 per day. One full test-set run needs about 100 calls, so on the free tier one run can take more than a day.
+
+### OpenCode CLI (free testing)
+
+`opencode_cli` runs the official `opencode` client as a headless subprocess. It is for
+fictional demo data only. Do not send real tender files through it.
+
+Why it is not production-safe:
+
+- The built-in `plan` agent is read-only, but it still has file-reading tools. A PDF can
+  contain prompt-injection text.
+- The free models are limited-time. Some of them log or train on inputs. The free map uses
+  `opencode/big-pickle` for hard tasks, which may log or train. `glm-5.3-flash-free` and
+  `deepseek-v4.1-flash-free` are zero-retention. `longcat-2.5-preview-free` is a
+  zero-retention alternative for hard.
+- The free tier returns `403 FreeTierError` when a custom agent sets `permissions`, `tools`
+  or `permission`. Use the built-in `plan` agent. Do not point `OPENCODE_CLI_PATH` at a
+  wrapper that loads another agent.
+
+Setup:
+
+```bash
+cd backend
+uv sync --python 3.13
+opencode --version   # the tested version is 2.0.32
+```
+
+Run the synthetic demo set:
+
+```bash
+cd backend
+rm -rf ../test-data/demo-samples
+uv run python demo/make_samples.py --out ../test-data/demo-samples
+mv ../test-data/demo-samples/bidder-a ../test-data/demo-samples/bid-1
+mv ../test-data/demo-samples/bidder-b ../test-data/demo-samples/bid-2
+rm -rf ../data_runs/opencode-demo
+
+MODELS_CONFIG=config/models.opencode.toml LLM_PROVIDER=opencode_cli \
+  uv run python scripts/run_experiment.py \
+  --set ../test-data/demo-samples --data-dir ../data_runs/opencode-demo \
+  --provider opencode_cli
+```
+
+`config/models.opencode.toml` maps the tasks to free models:
+
+| Tier | Model | Notes |
+|---|---|---|
+| easy | `opencode/glm-5.3-flash-free` | zero-retention; used for `read_page`, `page_cards`, `confirm_contradictions` |
+| standard | `opencode/deepseek-v4.1-flash-free` | zero-retention; extraction, consolidation, matching |
+| hard | `opencode/big-pickle` | may log or train; `match_hard` and escalation |
+
+The provider creates a private temporary `HOME`, `XDG_*` tree and working directory for
+every call. It removes inherited `OPENCODE_*` and model API keys. The prompt goes on
+stdin. Images are written as PNG files and attached with repeated `--file` flags. The CLI
+does not report the answering model, tokens or cost in JSON mode, so those fields stay
+empty.
+
+The cache identity is `opencode_cli:<agent>`, for example `opencode_cli:plan`. Changing
+`OPENCODE_AGENT` makes old answers invalid. The provider is selectable by environment and
+configuration only. There is no UI switch.
+
+Run the vision bake-off against the free CLI with:
+
+```bash
+MODELS_CONFIG=config/models.opencode.toml LLM_PROVIDER=opencode_cli \
+  uv run python scripts/bakeoff.py --set ../test-data/demo-samples \
+  --models "opencode/glm-5.3-flash-free" \
+  --pages "bid-2/03 Документы и справки.pdf:4" \
+  --i-understand-data-is-sent-to-provider
+```
+
+The bake-off reads `LLM_PROVIDER` now. Earlier it always used the provider in
+`models.toml`.
 
 ### Caching makes reruns free
 
@@ -144,9 +217,9 @@ If the handoff provider is active, `--stage tender` and `--stage bid` may stop w
 - `app/runner.py`: the in-process task runner and the stage registry.
 - `app/models.py`, `schemas.py`, `db.py`, `settings.py`, `storage.py`: tables, API models, database, settings, file layout.
 - `engine/`: the pipeline. No FastAPI imports. Main files: `pipeline.py` (reading), `tender_stages.py`, `bid_stages.py`, `score_stages.py`, `verify.py`, `status.py`, `scoring.py`, and `rules/`.
-- `llm/`: the LLM client, the cache, and `providers/` (`handoff.py`, `openrouter.py`).
+- `llm/`: the LLM client, the cache, and `providers/` (`claude_cli.py`, `anthropic_api.py`, `openrouter.py`, `opencode_cli.py`, `handoff.py`).
 - `prompts/<task>/vN.md`: one folder per LLM task. A new prompt version is a new file. Do not edit old ones.
-- `config/`: `models.toml` (models, limits) and `scoring.toml` (weights, review threshold).
+- `config/`: `models.toml` (models, limits), `models.opencode.toml` (free OpenCode CLI) and `scoring.toml` (weights, review threshold).
 - `scripts/`: `run_testset.py` (test-set runs), `bakeoff.py` (vision model test; sends page images to the provider, needs its confirmation flag), `set_openrouter_key.sh`.
 - `tests/unit/`: unit tests. `tests/fixtures/`: small test inputs. `tests/gold/`: expected results (empty for now).
 - `i18n/`: interface strings in Russian (`ru.json`) and English (`en.json`).

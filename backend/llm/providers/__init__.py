@@ -5,7 +5,8 @@ TransientProviderError for failures worth retrying (429, 5xx, timeouts, connecti
 errors); the service layer does the retrying. ProviderUnavailable (llm/client.py)
 means the provider cannot be used at all and is never retried. Other exceptions are fatal.
 
-Providers: claude_cli (default), anthropic_api, openrouter, handoff (development only).
+Providers: claude_cli (default), anthropic_api, openrouter, handoff (development only),
+opencode_cli (free OpenCode models, synthetic testing only).
 """
 
 from dataclasses import dataclass
@@ -55,7 +56,7 @@ class Provider(Protocol):
     async def complete(self, request: ProviderRequest) -> ProviderResponse: ...
 
 
-PROVIDER_NAMES = ("claude_cli", "anthropic_api", "openrouter", "handoff")
+PROVIDER_NAMES = ("claude_cli", "anthropic_api", "openrouter", "handoff", "opencode_cli")
 
 
 def get_provider(name: str) -> Provider:
@@ -82,6 +83,10 @@ def get_provider(name: str) -> Provider:
         from llm.providers.handoff import HandoffProvider
 
         return HandoffProvider(settings.data_dir / "llm_handoff")
+    if name == "opencode_cli":
+        from llm.providers.opencode_cli import OpencodeCliProvider
+
+        return OpencodeCliProvider(settings.opencode_cli_path, agent=settings.opencode_agent)
     if name in {"openai", "gemini"}:
         raise NotImplementedError(f"LLM provider '{name}' is not implemented yet")
     raise ValueError(f"unknown LLM provider '{name}'; use one of: {', '.join(PROVIDER_NAMES)}")

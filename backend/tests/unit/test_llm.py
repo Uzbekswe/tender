@@ -463,6 +463,43 @@ def test_get_llm_client_uses_env_provider_and_concurrency(data_dir, monkeypatch)
     assert default._tiers["hard"] == "claude-opus-5-5"
 
 
+def test_opencode_cache_identity_includes_the_agent(data_dir, monkeypatch):
+    from app.settings import get_settings
+    from llm.service import cache_provider_name, get_llm_client
+
+    config = Path(__file__).resolve().parents[2] / "config" / "models.opencode.toml"
+    monkeypatch.setenv("LLM_PROVIDER", "opencode_cli")
+    monkeypatch.setenv("OPENCODE_AGENT", "plan")
+    monkeypatch.setenv("MODELS_CONFIG", str(config))
+    get_settings.cache_clear()
+    try:
+        assert cache_provider_name() == "opencode_cli:plan"
+        client = get_llm_client(lambda: Session(create_engine("sqlite://")))
+        assert client._provider_name == "opencode_cli:plan"
+        assert client._tiers["easy"] == "opencode/glm-5.3-flash-free"
+
+        monkeypatch.setenv("OPENCODE_AGENT", "build")
+        get_settings.cache_clear()
+        assert cache_provider_name() == "opencode_cli:build"
+    finally:
+        get_settings.cache_clear()
+
+
+def test_call_tag_includes_the_opencode_agent(data_dir, monkeypatch):
+    from app.settings import get_settings
+    from llm.prompts import call_tag
+
+    config = Path(__file__).resolve().parents[2] / "config" / "models.opencode.toml"
+    monkeypatch.setenv("LLM_PROVIDER", "opencode_cli")
+    monkeypatch.setenv("MODELS_CONFIG", str(config))
+    get_settings.cache_clear()
+    try:
+        tag = call_tag("page_cards", "page_cards")
+    finally:
+        get_settings.cache_clear()
+    assert tag.startswith("opencode_cli:plan:opencode/glm-5.3-flash-free|page_cards@v")
+
+
 def test_call_tag_resolves_tier_to_model(data_dir, monkeypatch):
     from llm.prompts import call_tag
 

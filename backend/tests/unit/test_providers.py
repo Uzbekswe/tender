@@ -1,10 +1,12 @@
-"""Provider tests: Claude CLI (command line, stream-json parsing, errors) and the Anthropic API
-provider with a fake client and fake SDK classes. No real model call is made."""
+"""Provider tests: Claude CLI (command line, stream-json parsing, errors), the Anthropic API
+provider with a fake client and fake SDK classes, and the OpenCode CLI with a fake runner.
+No real model call is made."""
 
 import base64
 import json
 import sys
 import time
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -15,6 +17,7 @@ from llm.client import LLMError, ProviderUnavailable
 from llm.providers import ChatMessage, ProviderRequest, TransientProviderError, get_provider
 from llm.providers import anthropic_api as anthropic_mod
 from llm.providers import claude_cli as cli
+from llm.providers import opencode_cli as oc
 from llm.providers.anthropic_api import AnthropicAPIProvider
 from llm.client import ImageInput
 
@@ -255,8 +258,152 @@ def test_cli_discovery_without_running_a_model():
 def test_get_provider_builds_the_new_providers_without_network(data_dir):
     assert isinstance(get_provider("claude_cli"), cli.ClaudeCliProvider)
     assert type(get_provider("anthropic_api")).__name__ == "AnthropicAPIProvider"
+    assert type(get_provider("opencode_cli")).__name__ == "OpencodeCliProvider"
     with pytest.raises(ValueError, match="unknown LLM provider"):
         get_provider("nope")
+
+
+# ----- OpenCode CLI provider with a fake runner -----
+
+class FakeOpencodeRunner:
+    def __init__(self, returncode=0, stdout=b"", stderr=b""):
+        self.returncode, self.stdout, self.stderr = returncode, stdout, stderr
+        self.argv = None
+        self.stdin = None
+        self.timeout = None
+        self.cwd = None
+        self.cwd_is_dir = None
+        self.env = None
+        self.files = []
+        self.file_bytes = []
+
+    async def __call__(self, argv, stdin, timeout_s, cwd, env):
+        self.argv, self.stdin, self.timeout = list(argv), stdin, timeout_s
+        self.cwd, self.cwd_is_dir, self.env = cwd, cwd.is_dir(), dict(env)
+        self.files = [Path(argv[i + 1]) for i, part in enumerate(argv) if part == "--file"]
+        self.file_bytes = [path.read_bytes() for path in self.files]
+        return self.returncode, self.stdout, self.stderr
+
+
+def opencode_text_line(text: str) -> bytes:
+    event = {"type": "text", "part": {"type": "text", "text": text}}
+    return json.dumps(event).encode() + b"\n"
+
+
+def opencode_error_line(kind: str, message: str) -> bytes:
+    event = {"type": "error", "error": {"type": kind, "message": message}}
+    return json.dumps(event).encode() + b"\n"
+
+
+async def test_opencode_command_line_uses_the_plan_agent_and_stdin(monkeypatch):
+    monkeypatch.setenv("OPENCODE_CONFIG_DIR", "/tmp/must-not-be-inherited")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-not-real")
+    runner = FakeOpencodeRunner(stdout=opencode_text_line('{"name": "Acme", "count": 1}'))
+    provider = oc.OpencodeCliProvider("/opt/bin/opencode", runner=runner)
+
+    response = await provider.complete(make_request(
+        [ChatMessage("system", "SYS"), ChatMessage("user", "hello")],
+        model="opencode/glm-5.3-flash-free",
+    ))
+
+    assert runner.argv[:2] == ["/opt/bin/opencode", "run"]
+    assert "--standalone" in runner.argv
+    assert runner.argv[runner.argv.index("--format") + 1] == "json"
+    assert runner.argv[runner.argv.index("--agent") + 1] == "plan"
+    assert runner.argv[runner.argv.index("--model") + 1] == "opencode/glm-5.3-flash-free"
+    assert "--file" not in runner.argv  # no images in this request
+    assert "hello" not in runner.argv  # the prompt goes on stdin, not the command line
+    assert runner.cwd_is_dir is True
+    assert Path(runner.env["HOME"]).parent == runner.cwd.parent
+    assert runner.env["XDG_CONFIG_HOME"].startswith(str(runner.cwd.parent))
+    assert "OPENCODE_CONFIG_DIR" not in runner.env
+    assert "OPENAI_API_KEY" not in runner.env
+    prompt = runner.stdin.decode()
+    assert "SYS" in prompt and "hello" in prompt
+    assert "JSON Schema" in prompt and '"count"' in prompt
+    assert response.text == '{"name": "Acme", "count": 1}'
+    assert response.model_answered is None  # the CLI does not report it
+
+
+async def test_opencode_images_are_written_and_attached_in_order():
+    first = ImageInput(png_bytes=PNG + b"1", label="DOC-01 p.1")
+    second = ImageInput(png_bytes=PNG + b"2", label="DOC-02 p.2")
+    runner = FakeOpencodeRunner(stdout=opencode_text_line('{"name": "Acme", "count": 2}'))
+    provider = oc.OpencodeCliProvider("opencode", runner=runner)
+
+    await provider.complete(make_request(
+        [ChatMessage("user", "Read both.", (first, second))],
+        model="opencode/glm-5.3-flash-free",
+    ))
+
+    assert len(runner.files) == 2
+    assert runner.file_bytes == [first.png_bytes, second.png_bytes]
+    prompt = runner.stdin.decode()
+    assert "Attached images, in order:" in prompt
+    assert "1. DOC-01 p.1" in prompt and "2. DOC-02 p.2" in prompt
+
+
+def test_opencode_parse_events_uses_the_last_json_text_block():
+    stdout = (
+        b"not json\n"
+        + opencode_text_line("I will answer now.")
+        + opencode_text_line('{"name": "Acme", "count": 3}')
+    )
+
+    text, error = oc.parse_events(stdout)
+
+    assert text == '{"name": "Acme", "count": 3}'
+    assert error is None
+    assert oc.parse_events(b"plain text\n") == (None, None)
+
+
+@pytest.mark.parametrize("kind, message, expected, fragment", [
+    ("unknown", "403 FreeTierError: free tier is limited", ProviderUnavailable, "plan agent"),
+    ("provider.no-route", "Model unavailable: opencode/nope", ProviderUnavailable, "Model unavailable"),
+    ("provider.rate_limit", "Rate limit reached", TransientProviderError, "Rate limit"),
+    ("unknown", "Image could not be decoded: a.png", LLMError, "Image could not be decoded"),
+])
+async def test_opencode_error_events_map_to_typed_errors(kind, message, expected, fragment):
+    runner = FakeOpencodeRunner(stdout=opencode_error_line(kind, message))
+    provider = oc.OpencodeCliProvider("opencode", runner=runner)
+
+    with pytest.raises((LLMError, TransientProviderError, ProviderUnavailable)) as info:
+        await provider.complete(make_request([ChatMessage("user", "x")]))
+
+    assert isinstance(info.value, expected)
+    assert fragment in str(info.value)
+    if expected is LLMError:
+        assert not isinstance(info.value, (TransientProviderError, ProviderUnavailable))
+
+
+async def test_opencode_exit_without_text_is_transient_and_missing_binary_is_unavailable():
+    silent = oc.OpencodeCliProvider("opencode", runner=FakeOpencodeRunner(returncode=0))
+    with pytest.raises(TransientProviderError, match="no text event"):
+        await silent.complete(make_request([ChatMessage("user", "x")]))
+
+    crashed = oc.OpencodeCliProvider(
+        "opencode",
+        runner=FakeOpencodeRunner(returncode=1, stderr=b"rate limit"),
+    )
+    with pytest.raises(TransientProviderError, match="rate limit"):
+        await crashed.complete(make_request([ChatMessage("user", "x")]))
+
+    free_tier = oc.OpencodeCliProvider(
+        "opencode",
+        runner=FakeOpencodeRunner(returncode=1, stderr=b"403 FreeTierError: free tier denied"),
+    )
+    with pytest.raises(ProviderUnavailable, match="FreeTierError"):
+        await free_tier.complete(make_request([ChatMessage("user", "x")]))
+
+    with pytest.raises(ProviderUnavailable, match="OpenCode CLI not found"):
+        await oc.run_subprocess(
+            ["/nonexistent/opencode-binary-for-tests"], b"", 5, Path.cwd(), {}
+        )
+
+
+def test_opencode_cli_discovery_without_running_a_model():
+    assert oc.cli_found("/nonexistent/opencode-binary-for-tests") is False
+    assert oc.cli_version("/nonexistent/opencode-binary-for-tests") is None
 
 
 # ----- Anthropic API provider with a fake client -----

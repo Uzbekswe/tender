@@ -47,7 +47,7 @@ from app.runner import RUN_END_HOOKS, add_warning
 from app.schemas import RunCreate
 from app.storage import get_store
 from llm import cache
-from llm.service import provider_name
+from llm.service import cache_provider_name
 
 logger = logging.getLogger(__name__)
 
@@ -372,7 +372,7 @@ def load_fixture(session: Session, path: Path | None = None) -> int:
     source = path or FIXTURE_PATH
     if not source.is_file():
         return 0
-    current = provider_name()
+    current = cache_provider_name()
     stored = set(session.exec(select(LlmCall.key)).all())
     inserted = 0
     for line in source.read_text(encoding="utf-8").splitlines():
